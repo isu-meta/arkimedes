@@ -1,6 +1,37 @@
+from collections import namedtuple
 import sqlite3
 
+ARKRecord = namedtuple(
+    "ARKRecord",
+    (
+        "ark",
+        "profile",
+        "dc_publisher",
+        "target",
+        "erc_when",
+        "ownergroup",
+        "status",
+        "erc_what",
+        "erc_who",
+        "export",
+        "dc_title",
+        "updated",
+        "dc_type",
+        "dc_date",
+        "owner",
+        "dc_creator",
+        "created",
+    ),
+)
+
+ARKRecord.__doc__ = """A friendly representation of an ARK record.
+                    The seemingly-arbitrary attribute order reflects the
+                    order used in EZID ANVL and XML records."""
+
+
 class DB:
+    """A thin wrapper for SQLite access."""
+
     def __init__(self, addr):
         self.address = addr
         self.connection = None
@@ -31,3 +62,5 @@ class DB:
     def delete_row(self, table, condition):
         self._execute_edit(f"DELETE FROM {table} WHERE {condition}")
 
+    def find(self, table, field, condition):
+        self._execute_edit(f"SELECT FROM {table} WHERE {condition}")
