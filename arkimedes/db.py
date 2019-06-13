@@ -63,4 +63,4 @@ class DB:
         self._execute_edit(f"DELETE FROM {table} WHERE {condition}")
 
     def find(self, table, field, condition):
-        self._execute_edit(f"SELECT FROM {table} WHERE {condition}")
+        self.cursor.execute(f"SELECT FROM {table} WHERE {condition}")
