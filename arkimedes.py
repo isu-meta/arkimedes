@@ -1,26 +1,76 @@
+"""A command-line script for managing ARKs with the arkimedes library
+
+``arkimedes.py`` provides a command-line script for working with the 
+ARKimedes Python library, a library created to manage the creation
+and maintenance of ARKs for the Iowa State University Library.
+
+Examples
+--------
+``arkimedes.py username password action ark:/99999  [list of sources]``
+
+All arkimedes.py commands require an EZID username and password to be
+provided as the first two arguments, followed by an action and, depending
+on the action specified, either an ARK or an ARK shoulder. If minting
+new ARKs, a list of one or more metadata sources is required to generate
+the needed ARK records.
+"""
 import argparse
 
-from arkimedes import get_xml_from_urls
+from arkimedes import get_sources
+from arkimedes.db import add_to_db, Ark, Base, url_is_in_db, Session
 from arkimedes.ead import generate_anvl_fields_from_ead_xml
-from arkimedes.ezid import upload_anvl
+from arkimedes.ezid import batch_download, upload_anvl
 
-# arkimedes un pass ark:/sjksk outfile.txt ead --anvil-file anvl.txt 1 2 3 ...
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("username")
-    parser.add_argument("password")
-    parser.add_argument("shoulder")
-    parser.add_argument("output_file")
-    parser.add_argument("type")
-    parser.add_argument("--anvl-file")
-    parser.add_argument("sources", nargs="+")
+    parser.add_argument("username", help="EZID username.")
+    parser.add_argument("password", help="EZID password.")
+    parser.add_argument(
+        "action",
+        help="""Action to take. Accepted arguments are: 'anvl', 'batch',
+'delete', 'ead', 'update', and 'view'. 'anvl' mints new ARKs from ANVL
+metadata and 'ead' mints ARKs from EAD XML.""",
+    )
+    parser.add_argument(
+        "ark",
+        help="""After 'anvl' or 'ead', this must be an ARK shoulder. After
+'delete', 'update', or 'view', it must be an ARK. After 'batch' it may be any
+character or characters; a hyphen is recommended.""",
+    )
+    parser.add_argument(
+        "--anvl-file", help="Output file for generated ANVL-formatted metadata."
+    )
+    parser.add_argument(
+        "--batch-args",
+        nargs="+",
+        help="""Additional arguments for batch downloads in 'arg=value' format.
+For a full list of available options, see: 
+https://ezid.cdlib.org/doc/apidoc.html#parameters""",
+    )
+    parser.add_argument(
+        "--batch-compression",
+        help="""File compression to use with batch downloads. Accepted values are
+'gzip' and 'zip' If this argument is not given, the default 'zip' is used.""",
+    )
+    parser.add_argument(
+        "--batch-format",
+        help="""The file format to be returned when batch downloading ARK records.
+Accepted values are 'anvl', 'csv', and 'xml'. If this argument is not given,
+the default format 'anvl' is used.""",
+    )
+    parser.add_argument(
+        "--output-file", help="Output file for recording EZID API response."
+    )
+    parser.add_argument(
+        "--sources", nargs="+", help="Metadata sources to mint ARKs from."
+    )
 
     args = parser.parse_args()
 
-    if args.type == "ead":
-        ead_xml = get_xml_from_urls(args.sources)
+    if args.action == "ead":
+        ead_xml = get_sources(args.sources)
 
         if args.anvl_file:
             anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.anvl_file)
@@ -31,3 +81,32 @@ if __name__ == "__main__":
             upload_anvl(
                 args.username, args.password, args.shoulder, anvl, args.output_file
             )
+    elif args.action == "anvl":
+        pass
+    elif args.action == "batch":
+        format_ = "anvl"
+        compression = "zip"
+
+        if args.batch_format is not None:
+            format_ = args.batch_format
+
+        if args.batch_compression is not None:
+            compression = args.batch_compression
+
+        if args.batch_args is not None:
+            batch_download(
+                args.username, args.password, format_, compression, args.batch_args
+            )
+        else:
+            batch_download(args.username, args.password, format_, compression)
+
+    elif args.action == "delete":
+        pass
+    elif args.action == "update":
+        pass
+    elif args.action == "view":
+        pass
+
+
+if __name__ == "__main__":
+    main()
