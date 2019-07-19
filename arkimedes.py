@@ -17,9 +17,54 @@ the needed ARK records.
 import argparse
 
 from arkimedes import get_sources
-from arkimedes.db import add_to_db, Ark, Base, url_is_in_db, Session
+from arkimedes.db import (
+    add_to_db,
+    Ark,
+    Base,
+    create_db,
+    db_exists,
+    engine,
+    Session,
+    url_is_in_db,
+)
 from arkimedes.ead import generate_anvl_fields_from_ead_xml
-from arkimedes.ezid import batch_download, upload_anvl
+from arkimedes.ezid import batch_download, upload_anvl, view_anvl
+
+
+class MissingArgumentError(Exception):
+    pass
+
+
+def return_anvl(args):
+    if args.anvl is not None:
+        anvl = args.anvl
+    elif args.anvl_in is not None:
+        with open(args.anvl_in, "r", encoding="utf-8") as fh:
+            anvl = fh.read()
+    else:
+        raise MissingArgumentError(
+            f"Action '{args.action}' requires either '--anvl' or '--anvl-in'."
+        )
+
+    return anvl
+
+
+def submit_md(args):
+    anvl = return_anvl(args)
+
+    if args.action == "update":
+        ark = upload_anvl(
+            args.username, args.password, args.ark, anvl, "update", args.output_file
+        )
+    else:
+        ark = upload_anvl(
+            args.username, args.password, args.ark, anvl, "mint", args.output_file
+        )
+    # add item to db
+    ezid_anvl = view_anvl(args.username, args.password, ark, False)
+    ark_obj = Ark()
+    ark_obj.from_anvl(ezid_anvl)
+    add_to_db(ark_obj)
 
 
 def main():
@@ -40,7 +85,15 @@ metadata and 'ead' mints ARKs from EAD XML.""",
 character or characters; a hyphen is recommended.""",
     )
     parser.add_argument(
-        "--anvl-file", help="Output file for generated ANVL-formatted metadata."
+        "--anvl",
+        help="A string of one or more key-value pairs separated by a newline character.",
+    )
+    parser.add_argument(
+        "--anvl-in",
+        help="Input file consisting of key-value pairs seperated by newline characters.",
+    )
+    parser.add_argument(
+        "--anvl-out", help="Output file for generated ANVL-formatted metadata."
     )
     parser.add_argument(
         "--batch-args",
@@ -69,20 +122,21 @@ the default format 'anvl' is used.""",
 
     args = parser.parse_args()
 
+    if not db_exists():
+        create_db(engine)
+
     if args.action == "ead":
         ead_xml = get_sources(args.sources)
 
-        if args.anvl_file:
-            anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.anvl_file)
+        if args.anvl_out:
+            anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.anvl_out)
         else:
             anvls = generate_anvl_fields_from_ead_xml(ead_xml)
 
         for anvl in anvls:
-            upload_anvl(
-                args.username, args.password, args.shoulder, anvl, args.output_file
-            )
+            submit_md(args)
     elif args.action == "anvl":
-        pass
+        submit_md(args)
     elif args.action == "batch":
         format_ = "anvl"
         compression = "zip"
@@ -103,9 +157,9 @@ the default format 'anvl' is used.""",
     elif args.action == "delete":
         pass
     elif args.action == "update":
-        pass
+        submit_md(args)
     elif args.action == "view":
-        pass
+        view_anvl(args.username, args.password, args.ark)
 
 
 if __name__ == "__main__":

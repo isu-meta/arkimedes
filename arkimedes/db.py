@@ -35,6 +35,34 @@ class Ark(Base):
     erc_who = Column(Text)
     replaceable = Column(Boolean)
 
+    def from_anvl(self, anvl_string):
+        ark_dict = {
+            p[0].strip(): p[1].strip()
+            for p in [l.split(":", 1) for l in anvl_string.split("\n") if l != ""]
+        }
+
+        self.ark = ark_dict.get("success", "")
+        self.target = ark_dict.get("_target", "")
+        self.profile = ark_dict.get("_profile", "")
+        self.status = ark_dict.get("_status", "")
+        self.owner = ark_dict.get("_owner", "")
+        self.ownergroup = ark_dict.get("_ownergroup", "")
+        self.created = int(ark_dict.get("_created", 0))
+        self.updated = int(ark_dict.get("_updated", 0))
+        if ark_dict.get("_export") == "no":
+            self.export = False
+        else:
+            self.export = True
+        self.dc_creator = ark_dict.get("dc.creator", "")
+        self.dc_title = ark_dict.get("dc.title", "")
+        self.dc_type = ark_dict.get("dc.type", "")
+        self.dc_date = ark_dict.get("dc.date", "")
+        self.dc_publisher = ark_dict.get("dc.publisher", "")
+        self.erc_when = ark_dict.get("erc.when", "")
+        self.erc_what = ark_dict.get("erc.what", "")
+        self.erc_who = ark_dict.get("erc.who", "")
+        self.replaceable = False
+
 
 def create_db(engine):
     Base.metadata.create_all(engine)
@@ -109,9 +137,11 @@ def url_is_in_db(resource):
     # if session.query(Ark.target).filter_by(resource)
 
 
-def add_to_db(session, ark_obj):
+def add_to_db(ark_obj):
     session = Session()
-    pass
+    session.add(ark_obj)
+    session.commit()
+    session.close()
 
 
 def find_by_ark(ark):

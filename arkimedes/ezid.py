@@ -111,15 +111,21 @@ def load_arks_from_ezid_anvl(anvl_file):
                 ark_dict[k] = v
 
 
-def upload_anvl(user_name, password, shoulder, anvl_text, output_file=None):
-    base_url = "https://ezid.cdlib.org/shoulder"
+def upload_anvl(
+    user_name, password, shoulder, anvl_text, action="mint", output_file=None
+):
+    base_url = "https://ezid.cdlib.org"
     headers = {"Content-Type": "text/plain; charset=UTF-8"}
 
-    request_url = "/".join([base_url, shoulder])
+    if action == "mint":
+        request_url = "/".join([base_url, "shoulder", shoulder])
+    elif action == "update":
+        request_url = "/".join([base_url, "id", shoulder])
 
     r = requests.post(
         request_url, headers=headers, data=anvl_text, auth=(user_name, password)
     )
+    ark = r.text[9:]
 
     print(anvl_text)
     print(r.text)
@@ -129,3 +135,16 @@ def upload_anvl(user_name, password, shoulder, anvl_text, output_file=None):
             fh.write(anvl_text)
             fh.write(r.text)
             fh.write(CONCAT_STRING)
+
+    return ark
+
+
+def view_anvl(user_name, password, ark, print_=True):
+    base_url = "https://ezid.cdlib.org/id"
+    request_url = "/".join([base_url, ark])
+    r = requests.get(request_url, auth=(user_name, password))
+
+    if print_:
+        print(r.text)
+
+    return r.text
