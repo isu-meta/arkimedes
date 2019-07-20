@@ -24,15 +24,31 @@ from arkimedes.db import (
     create_db,
     db_exists,
     engine,
+    find_all,
+    find_ark,
+    find_replaceable,
+    find_url,
     Session,
     url_is_in_db,
 )
 from arkimedes.ead import generate_anvl_fields_from_ead_xml
-from arkimedes.ezid import batch_download, upload_anvl, view_anvl
+from arkimedes.ezid import (
+    batch_download,
+    get_value_from_anvl_string,
+    upload_anvl,
+    view_anvl,
+)
 
 
 class MissingArgumentError(Exception):
     pass
+
+
+def add_ark_to_db(args, ark, anvl):
+    ezid_anvl = view_anvl(args.username, args.password, ark, False)
+    ark_obj = Ark()
+    ark_obj.from_anvl(ezid_anvl)
+    add_to_db(ark_obj)
 
 
 def return_anvl(args):
@@ -49,22 +65,40 @@ def return_anvl(args):
     return anvl
 
 
-def submit_md(args):
-    anvl = return_anvl(args)
+def submit_md(args, anvl=None):
+    if anvl is None:
+        anvl = return_anvl(args)
 
     if args.action == "update":
-        ark = upload_anvl(
-            args.username, args.password, args.ark, anvl, "update", args.output_file
-        )
+        ark = upload(args, anvl, "update")
+        add_ark_to_db(args, ark, anvl)
     else:
-        ark = upload_anvl(
-            args.username, args.password, args.ark, anvl, "mint", args.output_file
-        )
-    # add item to db
-    ezid_anvl = view_anvl(args.username, args.password, ark, False)
-    ark_obj = Ark()
-    ark_obj.from_anvl(ezid_anvl)
-    add_to_db(ark_obj)
+        url = get_value_from_anvl_string("_target", anvl)
+
+        if url_is_in_db(url):
+            print(f"An ARK has already been minted for {url}.\n")
+            ark_obj = find_url(url)[0]
+            view_anvl(args.user_name, args.password, ark_obj.ark)
+        else:
+            if args.reuse:
+                replaceables = find_replaceable()
+
+                if replaceables is not None:
+                    args.ark = replaceables[0].ark
+                    upload(args, anvl, "update")
+                else:
+                    upload(args, anvl, "mint")
+            else:
+                ark = upload(args, anvl, "mint")
+
+            add_ark_to_db(args, ark, anvl)
+
+
+def upload(args, anvl, action):
+    ark = upload_anvl(
+        args.username, args.password, args.ark, anvl, action, args.output_file
+    )
+    return ark
 
 
 def main():
@@ -117,7 +151,17 @@ the default format 'anvl' is used.""",
         "--output-file", help="Output file for recording EZID API response."
     )
     parser.add_argument(
-        "--sources", nargs="+", help="Metadata sources to mint ARKs from."
+        "--sources",
+        nargs="+",
+        help="Files or URLs that contain metadata for populating ARK records",
+    )
+    parser.add_argument(
+        "--reuse",
+        action="store_true",
+        help="""When this flag is used with an action that mints a new ARK,
+arkimedes will reuse an ARK record that's been marked replaceable, if one
+is available, rather than minting a new ARK. If no replaceable record is 
+available, a new ARK will be minted.""",
     )
 
     args = parser.parse_args()
@@ -134,7 +178,7 @@ the default format 'anvl' is used.""",
             anvls = generate_anvl_fields_from_ead_xml(ead_xml)
 
         for anvl in anvls:
-            submit_md(args)
+            submit_md(args, anvl)
     elif args.action == "anvl":
         submit_md(args)
     elif args.action == "batch":

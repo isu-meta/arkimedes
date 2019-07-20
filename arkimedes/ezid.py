@@ -84,6 +84,12 @@ def build_anvl(
     )
 
 
+def get_value_from_anvl_string(field, anvl):
+    for line in anvl.split("\n"):
+        if line.startswith(field):
+            return line.split(":")[1].strip()
+
+
 def load_arks_from_ezid_anvl(anvl_file):
     """Creates a generator that yields ARK records as dictionaries.
 
