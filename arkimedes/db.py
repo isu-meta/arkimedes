@@ -35,6 +35,9 @@ class Ark(Base):
     erc_who = Column(Text)
     replaceable = Column(Boolean)
 
+    def __repr__(self):
+        return f"<Ark(ark={self.ark})>"
+
     def from_anvl(self, anvl_string):
         ark_dict = {
             p[0].strip(): p[1].strip()
@@ -61,7 +64,14 @@ class Ark(Base):
         self.erc_when = ark_dict.get("erc.when", "")
         self.erc_what = ark_dict.get("erc.what", "")
         self.erc_who = ark_dict.get("erc.who", "")
-        self.replaceable = False
+        self.replaceable = input_is_replaceable(ark_dict["title"])
+
+
+def add_to_db(ark_obj):
+    session = Session()
+    session.add(ark_obj)
+    session.commit()
+    session.close()
 
 
 def create_db(engine):
@@ -74,6 +84,64 @@ def db_exists():
 
     if DB_TYPE == "sqlite":
         return Path(SQLITE_FILE).exists()
+
+
+def find(filter_col=None, filter=None):
+    session = Session()
+
+    if filter is not None:
+        results = session.query(Ark).filter(filter_col == filter)
+    else:
+        results = session.query(Ark)
+
+    session.close()
+
+    return results
+
+
+def find_all():
+    return find()
+
+
+def find_ark(ark):
+    filter_col = Ark.ark
+    return find(filter_col, ark)
+
+
+def find_replaceable():
+    filter_col = Ark.replaceable
+    filter = True
+    return find(filter_col, filter)
+
+
+def find_url(url):
+    filter_col = Ark.target
+    filter = url
+    return find(filter_col, filter)
+
+
+def input_is_replaceable(title):
+    """Determine of an ARK can be replaced with a new target.
+
+    Occassionally, ARKs have been created for children of a compound object.
+    On their own, these ARKs serve no useful purpose. Instead of leaving them,
+    we can mark them as replaceable so that we can update already-minted ARKs
+    with entirely new metadata and avoid wasting our ARKs.
+
+    Parameters
+    ----------
+    title : str
+        The title of the object in the ARK record. Child objects that don't
+        need their own ARKs can be identified by titles like 'Front', 'Back',
+        'Page 2', 'p. 7', and even ''.
+    
+    Returns
+    -------
+    bool
+    """
+    bad_title = re.compile(r"(^([Pp](age|\.) \d+|[Ff]ront|[Bb]ack)$|^$)")
+
+    return bool(bad_title.match(title))
 
 
 def load_batch_download_file_into_db(batch_file):
@@ -108,49 +176,5 @@ def load_batch_download_file_into_db(batch_file):
     session.close()
 
 
-def input_is_replaceable(title):
-    """Determine of an ARK can be replaced with a new target.
-
-    Occassionally, ARKs have been created for children of a compound object.
-    On their own, these ARKs serve no useful purpose. Instead of leaving them,
-    we can mark them as replaceable so that we can update already-minted ARKs
-    with entirely new metadata and avoid wasting our ARKs.
-
-    Parameters
-    ----------
-    title : str
-        The title of the object in the ARK record. Child objects that don't
-        need their own ARKs can be identified by titles like 'Front', 'Back',
-        'Page 2', 'p. 7', and even ''.
-    
-    Returns
-    -------
-    bool
-    """
-    bad_title = re.compile(r"(^([Pp](age|\.) \d+|[Ff]ront|[Bb]ack)$|^$)")
-
-    return bool(bad_title.match(title))
-
-
-def url_is_in_db(resource):
-    session = Session()
-    # if session.query(Ark.target).filter_by(resource)
-
-
-def add_to_db(ark_obj):
-    session = Session()
-    session.add(ark_obj)
-    session.commit()
-    session.close()
-
-
-def find_by_ark(ark):
-    pass
-
-
-def find_by_replaceable_arks():
-    session = Session()
-    results = session.query(Ark.replaceable).filter_by(True)
-    session.close()
-
-    return results
+def url_is_in_db(url):
+    return bool(find_url(url))
