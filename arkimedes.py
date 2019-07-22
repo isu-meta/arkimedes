@@ -29,10 +29,12 @@ from arkimedes.db import (
     find_replaceable,
     find_url,
     Session,
+    update_db_record,
     url_is_in_db,
 )
 from arkimedes.ead import generate_anvl_fields_from_ead_xml
 from arkimedes.ezid import (
+    anvl_to_dict,
     batch_download,
     get_value_from_anvl_string,
     upload_anvl,
@@ -71,33 +73,36 @@ def submit_md(args, anvl=None):
 
     if args.action == "update":
         ark = upload(args, anvl, "update")
-        add_ark_to_db(args, ark, anvl)
     else:
         url = get_value_from_anvl_string("_target", anvl)
 
         if url_is_in_db(url):
             print(f"An ARK has already been minted for {url}.\n")
-            ark_obj = find_url(url)[0]
+            ark_obj = find_url(url).first()
             view_anvl(args.user_name, args.password, ark_obj.ark)
         else:
             if args.reuse:
                 replaceables = find_replaceable()
 
                 if replaceables is not None:
-                    args.ark = replaceables[0].ark
+                    args.ark = replaceables.first().ark
                     upload(args, anvl, "update")
                 else:
                     upload(args, anvl, "mint")
             else:
                 ark = upload(args, anvl, "mint")
 
-            add_ark_to_db(args, ark, anvl)
-
 
 def upload(args, anvl, action):
     ark = upload_anvl(
         args.username, args.password, args.ark, anvl, action, args.output_file
     )
+
+    if action == "mint":
+        add_ark_to_db(args, ark, anvl)
+    else:
+        anvl_dict = anvl_to_dict(anvl)
+        update_db_record(ark, anvl_dict)
     return ark
 
 

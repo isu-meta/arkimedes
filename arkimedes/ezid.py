@@ -5,6 +5,29 @@ from time import sleep
 import requests
 
 
+def anvl_to_dict(anvl):
+    """Convert single-record ANVL string to dictionary.
+
+    Parameters:
+    -----------
+    anvl : str
+        An ANVL-formatted string.
+
+    Returns:
+    --------
+    dict
+    """
+    ark_dict = {}
+    for line in anvl.split("\n"):
+        if line.startswith("::"):
+            ark_dict["ark"] = line[3:]
+        else:
+            k, v = line.split(":", 1)
+            ark_dict[k.strip()] = v.strip()
+    
+    return ark_dict
+
+
 def batch_download(username, password, format_="anvl", compression="zip", *args):
     """Batch download ARKs from EZID.
 
@@ -83,9 +106,9 @@ def build_anvl(
 
 
 def get_value_from_anvl_string(field, anvl):
-    for line in anvl.split("\n"):
-        if line.startswith(field):
-            return line.split(":")[1].strip()
+    anvl_dict = anvl_to_dict(anvl)
+    
+    return anvl_dict.get(field)
 
 
 def load_arks_from_ezid_anvl(anvl_file):

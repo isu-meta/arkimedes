@@ -1,3 +1,4 @@
+from inspect import cleandoc
 from pathlib import Path
 import re
 
@@ -64,7 +65,30 @@ class Ark(Base):
         self.erc_when = ark_dict.get("erc.when", "")
         self.erc_what = ark_dict.get("erc.what", "")
         self.erc_who = ark_dict.get("erc.who", "")
-        self.replaceable = input_is_replaceable(ark_dict["title"])
+        self.replaceable = input_is_replaceable(ark_dict["dc.title"])
+
+    def to_anvl(self):
+        return cleandoc(
+            f""":: {self.ark}
+                _created: {self.created}
+                _export: {"yes" if self.export else "no"}
+                _owner: {self.owner}
+                _ownergroup: {self.ownergroup}
+                _profile: {self.profile}
+                _status: {self.status}
+                _target: {self.target}
+                _updated: {self.updated}
+                dc.creator: {self.dc_creator}
+                dc.date: {self.dc_date}
+                dc.publisher: {self.dc_publisher}
+                dc.title: {self.dc_title}
+                dc.type: {self.dc_type}
+                erc.what: {self.erc_what}
+                erc.when: {self.erc_when}
+                erc.who: {self.erc_who}
+                iastate.replaceable: {self.replaceable}
+        """
+        )
 
 
 def add_to_db(ark_obj):
@@ -86,15 +110,20 @@ def db_exists():
         return Path(SQLITE_FILE).exists()
 
 
-def find(filter_col=None, filter=None):
-    session = Session()
+def find(filter_col=None, filter=None, session=None):
+    close_session = False
+
+    if session is None:
+        session = Session()
+        close_session = True
 
     if filter is not None:
         results = session.query(Ark).filter(filter_col == filter)
     else:
         results = session.query(Ark)
 
-    session.close()
+    if close_session:
+        session.close()
 
     return results
 
@@ -103,9 +132,9 @@ def find_all():
     return find()
 
 
-def find_ark(ark):
+def find_ark(ark, session=None):
     filter_col = Ark.ark
-    return find(filter_col, ark)
+    return find(filter_col, ark, session)
 
 
 def find_replaceable():
@@ -114,10 +143,10 @@ def find_replaceable():
     return find(filter_col, filter)
 
 
-def find_url(url):
+def find_url(url, session=None):
     filter_col = Ark.target
     filter = url
-    return find(filter_col, filter)
+    return find(filter_col, filter, session)
 
 
 def input_is_replaceable(title):
@@ -175,6 +204,27 @@ def load_batch_download_file_into_db(batch_file):
     session.commit()
     session.close()
 
+
+def sync_db():
+    """Syncronize local database with EZID records.
+
+    Add records from EZID to local database and update local records with
+    values from EZID where the two are mismatched.
+    """
+    pass
+
+
+def update_db_record(ark, ark_dict):
+
+    session = Session()
+    record = find_ark(ark, session).first()
+    
+    for key, value in ark_dict.items():
+        key = key.replace("_", "").replace(".", "_")
+        setattr(record, key, value)
+
+    session.commit()
+    session.close()
 
 def url_is_in_db(url):
     return bool(find_url(url))
