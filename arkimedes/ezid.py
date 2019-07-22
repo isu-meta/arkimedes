@@ -4,8 +4,6 @@ from time import sleep
 
 import requests
 
-from arkimedes import CONCAT_STRING
-
 
 def batch_download(username, password, format_="anvl", compression="zip", *args):
     """Batch download ARKs from EZID.
@@ -138,9 +136,8 @@ def upload_anvl(
 
     if output_file is not None:
         with open(output_file, "a", encoding="utf-8") as fh:
-            fh.write(anvl_text)
-            fh.write(r.text)
-            fh.write(CONCAT_STRING)
+            fh.write(f":: {ark}")
+            fh.write(f"{anvl_text.strip()}\n")
 
     return ark
 
