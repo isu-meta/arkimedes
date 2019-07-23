@@ -1,3 +1,31 @@
+"""Classes and functions fork working with the arkimedes database.
+
+To improve various operations, arkimedes tracks ARK records in a local
+database. This allows for flexibility in searching through minted ARKs,
+tracking local metadata not stored by EZID, and reduces the need to query
+the EZID API to get information about existing records.
+
+Classes and functions in this module:
+
+* Ark()
+* Base()
+* engine()
+* Session()
+
+* add_to_db(ark_obj)
+* create_db(engine)
+* db_exists()
+* find(filter_col=None, filter=None, session=None)
+* find_all(session=None)
+* find_ark(ark, session=None)
+* find_replaceable(session=None)
+* find_url(url, session=None)
+* input_is_replaceable(title)
+* load_batch_download_file_into_db(batch_file)
+* sync_db()
+* update_db_record(ark, ark_dict)
+* url_is_in_db(url)
+"""
 from inspect import cleandoc
 from pathlib import Path
 import re
@@ -15,6 +43,93 @@ Base = declarative_base()
 
 
 class Ark(Base):
+    """Map ARK records to database rows.
+
+    This class also serves as the schema for the arks table in the database.
+
+    Parameters
+    ----------
+    ark : str
+        Digital object's minted ARK. Primary key for ``arks`` table.
+    target : str
+        URL the ARK resolves to.
+    profile : str
+        Preferred metadata profile.
+    status : str
+        Valid options are: public, reserved, and unavailable.
+    owner : str
+        Institution owning the ARK.
+    ownergroup : str
+        Owner group of the ARK.
+    created : int
+        Unix timestamp of the time the ARK was created.
+    updated : int
+        Unix timestamp of when the ARK was last changed.
+    export : bool
+        If the ARK is publicized via external indexing and harvesting
+        services.
+    dc_creator : str
+        Creator of the target resource.
+    dc_title : str
+        Title of the target resource.
+    dc_type : str
+        DCMI Type of the target resource.
+    dc_date : str
+        ISO-8601-formatted date of the target resource's creation.
+    dc_publisher : str
+        Publishing institution of the target resource.
+    erc_when : str
+        ISO-8601-formatted date of the target resource's creation.
+    erc_what : str
+        Title of the target resource.
+    erc_who : str
+        Creator of the target resource.
+    replaceable : bool
+        Whether the metadata in a given ARK record can be replaced with
+        metadata describing a different resource.
+
+    Attributes
+    ----------
+    ark : str
+        Digital object's minted ARK. Primary key for ``arks`` table.
+    target : str
+        URL the ARK resolves to.
+    profile : str
+        Preferred metadata profile.
+    status : str
+        Valid options are: public, reserved, and unavailable.
+    owner : str
+        Institution owning the ARK.
+    ownergroup : str
+        Owner group of the ARK.
+    created : int
+        Unix timestamp of the time the ARK was created.
+    updated : int
+        Unix timestamp of when the ARK was last changed.
+    export : bool
+        If the ARK is publicized via external indexing and harvesting
+        services.
+    dc_creator : str
+        Creator of the target resource.
+    dc_title : str
+        Title of the target resource.
+    dc_type : str
+        DCMI Type of the target resource.
+    dc_date : str
+        ISO-8601-formatted date of the target resource's creation.
+    dc_publisher : str
+        Publishing institution of the target resource.
+    erc_when : str
+        ISO-8601-formatted date of the target resource's creation.
+    erc_what : str
+        Title of the target resource.
+    erc_who : str
+        Creator of the target resource.
+    replaceable : bool
+        Whether the metadata in a given ARK record can be replaced with
+        metadata describing a different resource.
+    """
+
     __tablename__ = "arks"
 
     ark = Column(String(30), primary_key=True)
@@ -37,11 +152,26 @@ class Ark(Base):
     replaceable = Column(Boolean)
 
     def __repr__(self):
+        """How an instance represents itself."""
         return f"<Ark(ark={self.ark})>"
 
     def from_anvl(self, anvl_string):
+        """Populate attributes from a single-record ANVL string.
+        
+        Parameters
+        ----------
+        anvl_string : str
+            Valid ANVL. See `A Name-Value Language (ANVL) <https://tools.ietf.org/search/draft-kunze-anvl-02>`_
+            for more details.
+
+        Returns
+        -------
+        None
+        """
         ark_dict = {
-            p[0].strip(): p[1].strip()
+            (p[0].strip() if p[0].strip() != "" else "success"): (
+                p[1].strip() if p[0].strip() != "" else p[1][2:].strip()
+            )
             for p in [l.split(":", 1) for l in anvl_string.split("\n") if l != ""]
         }
 
@@ -65,9 +195,17 @@ class Ark(Base):
         self.erc_when = ark_dict.get("erc.when", "")
         self.erc_what = ark_dict.get("erc.what", "")
         self.erc_who = ark_dict.get("erc.who", "")
-        self.replaceable = input_is_replaceable(ark_dict["dc.title"])
+        self.replaceable = ark_dict.get(
+            "iastate.replaceable", input_is_replaceable(ark_dict["dc.title"])
+        )
 
     def to_anvl(self):
+        """Return attributes as an ANVL string.
+
+        Returns
+        -------
+        str
+        """
         return cleandoc(
             f""":: {self.ark}
                 _created: {self.created}
@@ -92,6 +230,16 @@ class Ark(Base):
 
 
 def add_to_db(ark_obj):
+    """Add row to the database's arks table.
+
+    Parameters
+    ----------
+    ark_obj : arkimedes.db.Ark
+
+    Returns
+    -------
+    None
+    """
     session = Session()
     session.add(ark_obj)
     session.commit()
@@ -99,10 +247,25 @@ def add_to_db(ark_obj):
 
 
 def create_db(engine):
+    """Initialize a new database.
+    
+    Returns
+    -------
+    None
+    """
     Base.metadata.create_all(engine)
 
 
 def db_exists():
+    """Check if database exists.
+
+    Check if the database arkimedes has been initialized. Currently only
+    supports checking for SQLite databases.
+
+    Returns
+    -------
+    bool
+    """
     global DB_TYPE
     global SQLITE_FILE
 
@@ -111,6 +274,30 @@ def db_exists():
 
 
 def find(filter_col=None, filter=None, session=None):
+    """Find matching rows in the database.
+    
+    Finds one or more rows that match the ``filter`` term in the
+    ``filter_col``. Currently only supports equality match. filter_col and
+    filter require each other. ``session`` is always optional and is most
+    useful when an edit function needs to update the results of a query.
+    If ``filter_col`` and ``filter`` are not provided, returns the entire
+    arks table.
+
+    Parameters
+    ----------
+    filter_col : str or None
+        Table column to search. Optional, but required if using filter.
+        Defaults to None.
+    filter : str or None
+        Search term to use. Optional, but required if using filter_col.
+        Defaults to None.
+    session : sqlalchemy.orm.Session or None
+        Session object to conduct query with. Optional. Defaults to None.
+
+    Returns
+    -------
+    sqlalchemy.orm.Query
+    """
     close_session = False
 
     if session is None:
@@ -128,22 +315,68 @@ def find(filter_col=None, filter=None, session=None):
     return results
 
 
-def find_all():
-    return find()
+def find_all(session=None):
+    """Alias for find() without arguments.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session or None
+        Session object to conduct query with. Optional. Defaults to None.
+    
+    Returns
+    -------
+    sqlalchemy.orm.Query
+    """
+    return find(session=session)
 
 
 def find_ark(ark, session=None):
+    """Find record by ARK.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session or None
+        Session object to conduct query with. Optional. Defaults to None.
+    
+    Returns
+    -------
+    sqlalchemy.orm.Query
+    """
     filter_col = Ark.ark
     return find(filter_col, ark, session)
 
 
-def find_replaceable():
+def find_replaceable(session=None):
+    """Find replaceable ARK records.
+
+    Find rows in the arks table where the replaceable column is True.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session or None
+        Session object to conduct query with. Optional. Defaults to None.
+    
+    Returns
+    -------
+    sqlalchemy.orm.Query
+    """
     filter_col = Ark.replaceable
     filter = True
     return find(filter_col, filter)
 
 
 def find_url(url, session=None):
+    """Find record by URL in target column.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session or None
+        Session object to conduct query with. Optional. Defaults to None.
+    
+    Returns
+    -------
+    sqlalchemy.orm.Query
+    """
     filter_col = Ark.target
     filter = url
     return find(filter_col, filter, session)
@@ -174,6 +407,20 @@ def input_is_replaceable(title):
 
 
 def load_batch_download_file_into_db(batch_file):
+    """Load the EZID ANVL file into database.
+
+    Load the ANVL file fetched by ``akimedes.ezid.batch_download`` into
+    the database. Use for populating an empty database.
+
+    Parameters
+    ----------
+    batch_file : str or pathlib.Path
+        File to load ARK records from.
+
+    Returns
+    -------
+    None
+    """
     arks = load_arks_from_ezid_anvl(batch_file)
     session = Session()
 
@@ -215,10 +462,25 @@ def sync_db():
 
 
 def update_db_record(ark, ark_dict):
+    """Update existing table row.
 
+    Update the row found by ARK with the values in ark_dict.
+
+    Parameters
+    ----------
+    ark : str
+        ARK of record to edit.
+    ark_dict : dict
+        Keys map to the fields to update. Values are the new values.
+
+    Returns
+    -------
+    None
+
+    """
     session = Session()
     record = find_ark(ark, session).first()
-    
+
     for key, value in ark_dict.items():
         key = key.replace("_", "").replace(".", "_")
         setattr(record, key, value)
@@ -226,5 +488,17 @@ def update_db_record(ark, ark_dict):
     session.commit()
     session.close()
 
+
 def url_is_in_db(url):
+    """Check if a URL is in the arks table.
+
+    Parameters
+    ----------
+    url : str
+        URL to search for.
+    
+    Returns
+    -------
+    bool
+    """
     return bool(find_url(url))
