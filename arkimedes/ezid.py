@@ -24,7 +24,7 @@ def anvl_to_dict(anvl):
         else:
             k, v = line.split(":", 1)
             ark_dict[k.strip()] = v.strip()
-    
+
     return ark_dict
 
 
@@ -107,11 +107,11 @@ def build_anvl(
 
 def get_value_from_anvl_string(field, anvl):
     anvl_dict = anvl_to_dict(anvl)
-    
+
     return anvl_dict.get(field)
 
 
-def load_arks_from_ezid_anvl(anvl_file):
+def load_anvl_as_dict(anvl_file):
     """Creates a generator that yields ARK records as dictionaries.
 
     Parameters
@@ -136,6 +136,29 @@ def load_arks_from_ezid_anvl(anvl_file):
             else:
                 k, v = line.split(": ", 1)
                 ark_dict[k] = v
+
+
+def load_anvl_as_str(anvl_file):
+    """Creates a generator that yields ARK records as ANVL strings.
+
+    Parameters
+    ----------
+    anvl_file : str or pathlib.Path
+        File to load ARK records from.
+
+    Returns
+    -------
+    generator
+        Yields an ARK record as a string.
+    """
+    anvl_str = ""
+    with open(anvl_file, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line == "":
+                yield anvl_str
+            else:
+                anvl_str = "\n".join([anvl_str, line])
 
 
 def upload_anvl(

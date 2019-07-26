@@ -15,27 +15,30 @@ Classes and functions in this module:
 * add_to_db(ark_obj)
 * create_db(engine)
 * db_exists()
+* dump_db(out_file)
 * find(filter_col=None, filter=None, session=None)
 * find_all(session=None)
 * find_ark(ark, session=None)
 * find_replaceable(session=None)
 * find_url(url, session=None)
 * input_is_replaceable(title)
-* load_batch_download_file_into_db(batch_file)
+* load_anvl_file_into_db(batch_file, engine=engine, verbose=True)
 * sync_db()
 * update_db_record(ark, ark_dict)
 * url_is_in_db(url)
 """
+from copy import copy
 from inspect import cleandoc
 from pathlib import Path
 import re
+import sys
 
 from sqlalchemy import Column, create_engine, Integer, String, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from arkimedes.config import DB_CONN, DB_TYPE, SQLITE_FILE
-from arkimedes.ezid import load_arks_from_ezid_anvl
+from arkimedes.ezid import load_anvl_as_dict, load_anvl_as_str
 
 engine = create_engine(DB_CONN)
 Session = sessionmaker(bind=engine)
@@ -183,10 +186,7 @@ class Ark(Base):
         self.ownergroup = ark_dict.get("_ownergroup", "")
         self.created = int(ark_dict.get("_created", 0))
         self.updated = int(ark_dict.get("_updated", 0))
-        if ark_dict.get("_export") == "no":
-            self.export = False
-        else:
-            self.export = True
+        self.export = 0 if ark_dict.get("_export") == "no" else 1
         self.dc_creator = ark_dict.get("dc.creator", "")
         self.dc_title = ark_dict.get("dc.title", "")
         self.dc_type = ark_dict.get("dc.type", "")
@@ -195,8 +195,11 @@ class Ark(Base):
         self.erc_when = ark_dict.get("erc.when", "")
         self.erc_what = ark_dict.get("erc.what", "")
         self.erc_who = ark_dict.get("erc.who", "")
-        self.replaceable = ark_dict.get(
-            "iastate.replaceable", input_is_replaceable(ark_dict["dc.title"])
+        self.replaceable = (
+            1
+            if ark_dict.get("iastate.replaceable") == "True"
+            or input_is_replaceable(ark_dict["dc.title"])
+            else 0
         )
 
     def to_anvl(self):
@@ -206,7 +209,7 @@ class Ark(Base):
         -------
         str
         """
-        return cleandoc(
+        anvl = cleandoc(
             f""":: {self.ark}
                 _created: {self.created}
                 _export: {"yes" if self.export else "no"}
@@ -227,6 +230,8 @@ class Ark(Base):
                 iastate.replaceable: {self.replaceable}
         """
         )
+
+        return f"{anvl}\n\n"
 
 
 def add_to_db(ark_obj):
@@ -271,6 +276,24 @@ def db_exists():
 
     if DB_TYPE == "sqlite":
         return Path(SQLITE_FILE).exists()
+
+
+def dump_db(out_file):
+    """Dump database contents to an ANVL file.
+
+    Parameters
+    ----------
+    out_file: str or pathlib.Path
+        File to write database contents to.
+
+    Returns
+    -------
+    None
+    """
+    arks = find_all()
+    with open(out_file, "w", encoding="utf-8") as fh:
+        for ark in arks:
+            fh.write(ark.to_anvl())
 
 
 def find(filter_col=None, filter=None, session=None):
@@ -406,44 +429,62 @@ def input_is_replaceable(title):
     return bool(bad_title.match(title))
 
 
-def load_batch_download_file_into_db(batch_file):
-    """Load the EZID ANVL file into database.
+def load_anvl_file_into_db(batch_file, engine=engine, verbose=True):
+    """Load an ANVL file into database.
 
-    Load the ANVL file fetched by ``akimedes.ezid.batch_download`` into
-    the database. Use for populating an empty database.
+    Load an ANVL file that has only fields coresponding the the schema of
+    arkimedes.db.Ark into the database. Useful for populating the database
+    from ``akimedes.ezid.batch_download`` or restoring from a back-up file.
+    Use only for a fresh database as this function does not check to see
+    if an record already exists.
 
     Parameters
     ----------
     batch_file : str or pathlib.Path
         File to load ARK records from.
+    engine : sqlalchemy.engine
+        Engine to use if the database needs to be created. Defaults to
+        ``arkimedes.db.engine.``
+    verbose : bool
+        If True print the number of the item being added to the database. 
 
     Returns
     -------
     None
     """
-    arks = load_arks_from_ezid_anvl(batch_file)
+    if not db_exists():
+        create_db(engine)
+
+    arks = load_anvl_as_dict(batch_file)
     session = Session()
 
-    for a in arks:
+    for i, a in enumerate(arks):
+        if verbose:
+            sys.stdout.write(f"\r{i}")
+            sys.stdout.flush()
+
         ark_obj = Ark(
-            ark=a["ark"],
-            target=a["_target"],
-            profile=a["_profile"],
-            status=a["_status"],
-            owner=a["_owner"],
-            ownergroup=a["_ownergroup"],
-            created=int(a["_created"]),
-            updated=int(a["_updated"]),
-            export=True if a["_export"] == "yes" else False,
-            dc_creator=a["dc.creator"],
-            dc_title=a["dc.title"],
-            dc_type=a["dc.type"],
-            dc_date=a["dc.date"],
-            dc_publisher=a["dc.publisher"],
-            erc_when=a["erc.when"],
-            erc_what=a["erc.what"],
-            erc_who=a["erc.who"],
-            replaceable=input_is_replaceable(a["dc.title"]),
+            ark=a.get("ark", ""),
+            target=a.get("_target", ""),
+            profile=a.get("_profile", ""),
+            status=a.get("_status", ""),
+            owner=a.get("_owner", ""),
+            ownergroup=a.get("_ownergroup", ""),
+            created=int(a.get("_created", 0)),
+            updated=int(a.get("_updated", 0)),
+            export=False if a.get("_export") == "no" else True,
+            dc_creator=a.get("dc.creator", ""),
+            dc_title=a.get("dc.title", ""),
+            dc_type=a.get("dc.type", ""),
+            dc_date=a.get("dc.date", ""),
+            dc_publisher=a.get("dc.publisher", ""),
+            erc_when=a.get("erc.when", ""),
+            erc_what=a.get("erc.what", ""),
+            erc_who=a.get("erc.who", ""),
+            replaceable=True
+            if a.get("iastate.replaceable") == "True"
+            or input_is_replaceable(a["dc.title"])
+            else False,
         )
 
         session.add(ark_obj)
