@@ -501,4 +501,4 @@ def url_is_in_db(url):
     -------
     bool
     """
-    return bool(find_url(url))
+    return bool(find_url(url).first())

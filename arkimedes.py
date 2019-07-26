@@ -79,13 +79,13 @@ def submit_md(args, anvl=None):
         if url_is_in_db(url):
             print(f"An ARK has already been minted for {url}.\n")
             ark_obj = find_url(url).first()
-            view_anvl(args.user_name, args.password, ark_obj.ark)
+            view_anvl(args.username, args.password, ark_obj.ark)
         else:
             if args.reuse:
-                replaceables = find_replaceable()
+                replaceable = find_replaceable().first()
 
-                if replaceables is not None:
-                    args.ark = replaceables.first().ark
+                if replaceable is not None:
+                    args.ark = replaceable.ark
                     upload(args, anvl, "update")
                 else:
                     upload(args, anvl, "mint")
