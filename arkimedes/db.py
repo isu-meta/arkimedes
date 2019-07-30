@@ -523,7 +523,7 @@ def update_db_record(ark, ark_dict):
     record = find_ark(ark, session).first()
 
     for key, value in ark_dict.items():
-        key = key.replace("_", "").replace(".", "_")
+        key = key.replace("iastate.", "").replace("_", "").replace(".", "_")
         setattr(record, key, value)
 
     session.commit()

@@ -87,6 +87,7 @@ def submit_md(args, anvl=None):
                 if replaceable is not None:
                     args.ark = replaceable.ark
                     upload(args, anvl, "update")
+                    update_db_record(replaceable.ark, {"iastate.replaceable": False})
                 else:
                     upload(args, anvl, "mint")
             else:
