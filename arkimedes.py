@@ -207,7 +207,12 @@ available, a new ARK will be minted.""",
     elif args.action == "delete":
         pass
     elif args.action == "update":
-        submit_md(args)
+        if args.anvl is not None:
+            anvl = args.anvl
+        else:
+            anvl = args.anvl_in
+
+        submit_md(args, anvl)
     elif args.action == "view":
         view_anvl(args.username, args.password, args.ark)
 
