@@ -1,7 +1,8 @@
-arkimedes_env/
+arki_env/
 env_arkimedes/
 **/__pycache__
 arkimedes.egg-info/
 *.txt
 *.sqlite
 *.zip
+*.pickle
