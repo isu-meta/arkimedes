@@ -23,7 +23,12 @@ def generate_anvl_fields_from_ead_xml(files, output_file=None):
                 creator = ""
 
             title = tree.xpath("//archdesc/did/unittitle/text()")[0]
-            dates = tree.xpath("//archdesc/did/unitdate/@normal")[0]
+
+            try:
+                dates = tree.xpath("//archdesc/did/unitdate/@normal")[0]
+            except:
+                dates = ""
+
             target = tree.xpath("//ead/eadheader/eadid/text()")[0]
 
             anvl_strings.append(build_anvl(creator, title, dates, target))
