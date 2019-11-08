@@ -6,13 +6,13 @@ and maintenance of ARKs for the Iowa State University Library.
 
 Examples
 --------
-``arkimedes.py username password action ark:/99999  [list of sources]``
+``arkimedes.py action target [username password]  [list of sources]``
 
-All arkimedes.py commands require an EZID username and password to be
-provided as the first two arguments, followed by an action and, depending
-on the action specified, either an ARK or an ARK shoulder. If minting
-new ARKs, a list of one or more metadata sources is required to generate
-the needed ARK records.
+All arkimedes.py commands require an action argument and a target argument.
+All commands that interact with the EZID API require an EZID username and
+password to be provided.
+
+
 """
 import argparse
 
@@ -54,14 +54,15 @@ def add_ark_to_db(args, ark, anvl):
 
 
 def return_anvl(args):
-    if args.anvl is not None:
-        anvl = args.anvl
-    elif args.anvl_in is not None:
-        with open(args.anvl_in, "r", encoding="utf-8") as fh:
-            anvl = fh.read()
+    if args.source is not None:
+        if "\n" in arg.source:
+            anvl = arg.source
+        else:
+            with open(args.source, "r", encoding="utf-8") as fh:
+                anvl = fh.read()
     else:
         raise MissingArgumentError(
-            f"Action '{args.action}' requires either '--anvl' or '--anvl-in'."
+            f"Action '{args.action}' requires '--source'."
         )
 
     return anvl
@@ -85,7 +86,7 @@ def submit_md(args, anvl=None):
                 replaceable = find_replaceable().first()
 
                 if replaceable is not None:
-                    args.ark = replaceable.ark
+                    args.target = replaceable.ark
                     upload(args, anvl, "update")
                     update_db_record(replaceable.ark, {"iastate.replaceable": False})
                 else:
@@ -96,7 +97,7 @@ def submit_md(args, anvl=None):
 
 def upload(args, anvl, action):
     ark = upload_anvl(
-        args.username, args.password, args.ark, anvl, action, args.output_file
+        args.username, args.password, args.target, anvl, action, args.out
     )
 
     if action == "mint":
@@ -110,31 +111,20 @@ def upload(args, anvl, action):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("username", help="EZID username.")
-    parser.add_argument("password", help="EZID password.")
     parser.add_argument(
         "action",
-        help="""Action to take. Accepted arguments are: 'anvl', 'batch',
-'delete', 'ead', 'update', and 'view'. 'anvl' mints new ARKs from ANVL
-metadata and 'ead' mints ARKs from EAD XML.""",
+        help="""Action to take. Accepted arguments are: 'mint-anvl', 'batch',
+'delete', 'mint-ead', 'update', and 'view'. 'mint-anvl' mints new ARKs from ANVL
+metadata and 'mint-ead' mints ARKs from EAD XML.""",
     )
     parser.add_argument(
-        "ark",
-        help="""After 'anvl' or 'ead', this must be an ARK shoulder. After
+        "target",
+        help="""After 'mint-anvl' or 'mint-ead', this must be an ARK shoulder. After
 'delete', 'update', or 'view', it must be an ARK. After 'batch' it may be any
 character or characters; a hyphen is recommended.""",
     )
-    parser.add_argument(
-        "--anvl",
-        help="A string of one or more key-value pairs separated by a newline character.",
-    )
-    parser.add_argument(
-        "--anvl-in",
-        help="Input file consisting of key-value pairs seperated by newline characters.",
-    )
-    parser.add_argument(
-        "--anvl-out", help="Output file for generated ANVL-formatted metadata."
-    )
+    parser.add_argument("username", nargs="?", default="", help="EZID username.")
+    parser.add_argument("password", nargs="?", default="", help="EZID password.")
     parser.add_argument(
         "--batch-args",
         nargs="+",
@@ -154,10 +144,10 @@ Accepted values are 'anvl', 'csv', and 'xml'. If this argument is not given,
 the default format 'anvl' is used.""",
     )
     parser.add_argument(
-        "--output-file", help="Output file for recording EZID API response."
+        "--out", help="Output file for recording EZID API response."
     )
     parser.add_argument(
-        "--sources",
+        "--source",
         nargs="+",
         help="Files or URLs that contain metadata for populating ARK records",
     )
@@ -175,17 +165,17 @@ available, a new ARK will be minted.""",
     if not db_exists():
         create_db(engine)
 
-    if args.action == "ead":
-        ead_xml = get_sources(args.sources)
+    if args.action == "mint-ead":
+        ead_xml = get_sources(args.source)
 
-        if args.anvl_out:
-            anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.anvl_out)
+        if args.out:
+            anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.out)
         else:
             anvls = generate_anvl_fields_from_ead_xml(ead_xml)
 
         for anvl in anvls:
             submit_md(args, anvl)
-    elif args.action == "anvl":
+    elif args.action == "mint-anvl":
         submit_md(args)
     elif args.action == "batch":
         format_ = "anvl"
@@ -207,14 +197,9 @@ available, a new ARK will be minted.""",
     elif args.action == "delete":
         pass
     elif args.action == "update":
-        if args.anvl is not None:
-            anvl = args.anvl
-        else:
-            anvl = args.anvl_in
-
-        submit_md(args, anvl)
+        submit_md(args)
     elif args.action == "view":
-        view_anvl(args.username, args.password, args.ark)
+        view_anvl(args.username, args.password, args.target)
 
 
 if __name__ == "__main__":
