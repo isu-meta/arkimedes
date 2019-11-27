@@ -32,7 +32,7 @@ from arkimedes.db import (
     update_db_record,
     url_is_in_db,
 )
-from arkimedes.ead import generate_anvl_fields_from_ead_xml
+from arkimedes.ead import generate_anvl_from_ead_xml
 from arkimedes.ezid import (
     anvl_to_dict,
     batch_download,
@@ -40,6 +40,7 @@ from arkimedes.ezid import (
     upload_anvl,
     view_anvl,
 )
+from arkimedes.pdf import generate_anvl_from_conservation_reports
 
 
 class MissingArgumentError(Exception):
@@ -55,8 +56,8 @@ def add_ark_to_db(args, ark, anvl):
 
 def return_anvl(args):
     if args.source is not None:
-        if "\n" in arg.source:
-            anvl = arg.source
+        if "\n" in args.source:
+            anvl = args.source
         else:
             with open(args.source, "r", encoding="utf-8") as fh:
                 anvl = fh.read()
@@ -113,15 +114,17 @@ def main():
 
     parser.add_argument(
         "action",
-        help="""Action to take. Accepted arguments are: 'mint-anvl', 'batch',
-'delete', 'mint-ead', 'update', and 'view'. 'mint-anvl' mints new ARKs from ANVL
-metadata and 'mint-ead' mints ARKs from EAD XML.""",
+        help="""Action to take. Accepted arguments are: 'batch-download', 'delete',
+'mint-anvl', 'mint-ead', 'mint-conservation-report', 'update', and 'view'.
+'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
+from EAD XML. 'mint-conservation-report' mints new ARKs from Conservation
+Report PDFs.""",
     )
     parser.add_argument(
         "target",
-        help="""After 'mint-anvl' or 'mint-ead', this must be an ARK shoulder. After
-'delete', 'update', or 'view', it must be an ARK. After 'batch' it may be any
-character or characters; a hyphen is recommended.""",
+        help="""After any 'mint-' argument, this must be an ARK shoulder. After
+'delete', 'update', or 'view', it must be an ARK. After 'batch' it may be
+any character or characters; a hyphen is recommended.""",
     )
     parser.add_argument("username", nargs="?", default="", help="EZID username.")
     parser.add_argument("password", nargs="?", default="", help="EZID password.")
@@ -165,19 +168,30 @@ available, a new ARK will be minted.""",
     if not db_exists():
         create_db(engine)
 
-    if args.action == "mint-ead":
+    if args.action == "mint-anvl":
+        submit_md(args)
+    elif args.action == "mint-ead":
         ead_xml = get_sources(args.source)
 
         if args.out:
-            anvls = generate_anvl_fields_from_ead_xml(ead_xml, args.out)
+            anvls = generate_anvl_from_ead_xml(ead_xml, args.out)
         else:
-            anvls = generate_anvl_fields_from_ead_xml(ead_xml)
+            anvls = generate_anvl_from_ead_xml(ead_xml)
 
         for anvl in anvls:
             submit_md(args, anvl)
-    elif args.action == "mint-anvl":
-        submit_md(args)
-    elif args.action == "batch":
+    elif args.action == "mint-conservation-report":
+        pdfs = get_sources(args.sources)
+        pdf_data = zip(pdfs, args.sources)
+
+        if args.out:
+            anvls = generate_anvl_from_conservation_reports(pdf_data, args.out)
+        else:
+            anvls = generate_anvl_from_conservation_reports(pdf_data)
+
+        for anvl in anvls:
+            submit_md(args, anvl)
+    elif args.action == "batch-download":
         format_ = "anvl"
         compression = "zip"
 

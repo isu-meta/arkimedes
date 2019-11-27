@@ -105,6 +105,20 @@ def build_anvl(
     )
 
 
+def generate_anvl_strings(data_source, parser, output_file):
+    anvls = []
+
+    for d in data_source:
+        anvls.append(parser(d))
+
+    if output_file is not None:
+        with open(output_file, "w", encoding="utf-8") as fh:
+            for a in anvls:
+                fh.write(f"{a}\n")
+    
+    return anvls
+
+
 def get_value_from_anvl_string(field, anvl):
     anvl_dict = anvl_to_dict(anvl)
 

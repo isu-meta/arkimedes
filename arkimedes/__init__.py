@@ -34,3 +34,14 @@ def get_sources(sources):
     files.extend(get_from_urls(urls))
 
     return files
+
+
+def convert_date_string_to_iso(date_string, date_format="MMDDYYYY", delimiter="/"):
+    date_bits = date_string.split(delimiter)
+
+    if date_format == "MMDDYYYY":
+        date_out = "-".join(
+            [date_bits[2], date_bits[0].zfill(2), date_bits[1].zfill(2)]
+        )
+
+    return date_out
