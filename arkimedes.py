@@ -6,7 +6,7 @@ and maintenance of ARKs for the Iowa State University Library.
 
 Examples
 --------
-``arkimedes.py action target [username password]  [list of sources]``
+``arkimedes.py action target [username password] [--source source_list]``
 
 All arkimedes.py commands require an action argument and a target argument.
 All commands that interact with the EZID API require an EZID username and
@@ -37,6 +37,7 @@ from arkimedes.ezid import (
     anvl_to_dict,
     batch_download,
     get_value_from_anvl_string,
+    load_anvl_as_str_from_tsv,
     upload_anvl,
     view_anvl,
 )
@@ -54,12 +55,12 @@ def add_ark_to_db(args, ark, anvl):
     add_to_db(ark_obj)
 
 
-def return_anvl(args):
+def return_anvl(args, anvl_in):
     if args.source is not None:
-        if "\n" in args.source:
-            anvl = args.source
+        if "\n" in anvl_in:
+            anvl = anvl_in
         else:
-            with open(args.source, "r", encoding="utf-8") as fh:
+            with open(anvl_in, "r", encoding="utf-8") as fh:
                 anvl = fh.read()
     else:
         raise MissingArgumentError(
@@ -69,9 +70,8 @@ def return_anvl(args):
     return anvl
 
 
-def submit_md(args, anvl=None):
-    if anvl is None:
-        anvl = return_anvl(args)
+def submit_md(args, anvl_in):
+    anvl = return_anvl(args, anvl_in)
 
     if args.action == "update":
         ark = upload(args, anvl, "update")
@@ -115,10 +115,10 @@ def main():
     parser.add_argument(
         "action",
         help="""Action to take. Accepted arguments are: 'batch-download', 'delete',
-'mint-anvl', 'mint-ead', 'mint-conservation-report', 'update', and 'view'.
-'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
+'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update', and
+ 'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
 from EAD XML. 'mint-conservation-report' mints new ARKs from Conservation
-Report PDFs.""",
+Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
     )
     parser.add_argument(
         "target",
@@ -169,28 +169,28 @@ available, a new ARK will be minted.""",
         create_db(engine)
 
     if args.action == "mint-anvl":
-        submit_md(args)
+        for anvl in args.source:
+            submit_md(args, anvl)
     elif args.action == "mint-ead":
         ead_xml = get_sources(args.source)
 
-        if args.out:
-            anvls = generate_anvl_from_ead_xml(ead_xml, args.out)
-        else:
-            anvls = generate_anvl_from_ead_xml(ead_xml)
+        anvls = generate_anvl_from_ead_xml(ead_xml)
 
         for anvl in anvls:
             submit_md(args, anvl)
     elif args.action == "mint-conservation-report":
-        pdfs = get_sources(args.sources)
-        pdf_data = zip(pdfs, args.sources)
+        pdfs = get_sources(args.source)
+        pdf_data = zip(pdfs, args.source)
 
-        if args.out:
-            anvls = generate_anvl_from_conservation_reports(pdf_data, args.out)
-        else:
-            anvls = generate_anvl_from_conservation_reports(pdf_data)
+        anvls = generate_anvl_from_conservation_reports(pdf_data)
 
         for anvl in anvls:
             submit_md(args, anvl)
+    elif args.action == "mint-tsv":
+        for source in args.source:
+            for anvl in load_anvl_as_str_from_tsv(source):
+                submit_md(args, anvl)
+
     elif args.action == "batch-download":
         format_ = "anvl"
         compression = "zip"
@@ -211,7 +211,8 @@ available, a new ARK will be minted.""",
     elif args.action == "delete":
         pass
     elif args.action == "update":
-        submit_md(args)
+        for anvl in args.source:
+            submit_md(args, anvl)
     elif args.action == "view":
         view_anvl(args.username, args.password, args.target)
 

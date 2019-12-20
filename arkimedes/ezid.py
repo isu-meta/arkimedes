@@ -105,6 +105,18 @@ def build_anvl(
     )
 
 
+def convert_anvl_file_to_tsv(anvl_file, tsv_file):
+    with open(tsv_file, "w", encoding="utf-8") as fh:
+        anvls = load_anvl_as_dict(anvl_file)
+        #first = next(anvls)
+        #header = "\t".join(first.keys())
+        #first_row = "\t".join(first.values())
+        #fh.write(f"{header}\n{first_row}\n")
+        for anvl in anvls:
+            fh.write("\t".join(anvl.values()))
+            fh.write("\n")
+
+
 def generate_anvl_strings(data_source, parser, output_file):
     anvls = []
 
@@ -148,8 +160,8 @@ def load_anvl_as_dict(anvl_file):
             elif line.startswith("::"):
                 ark_dict["ark"] = line[3:]
             else:
-                k, v = line.split(": ", 1)
-                ark_dict[k] = v
+                k, v = line.split(":", 1)
+                ark_dict[k] = v.strip()
 
 
 def load_anvl_as_str(anvl_file):
@@ -175,6 +187,58 @@ def load_anvl_as_str(anvl_file):
                 anvl_str = "\n".join([anvl_str, line])
 
 
+def load_anvl_as_str_from_tsv(tsv_file):
+    """Creates a generator that yields ANVL strings from a TSV.
+
+    Requires a tab-separated-values file with the following
+    headers: dc.creator, dc.title, dc.date, _target, and dc.type.
+
+    Parameters
+    ----------
+    tsv_file : str or pathlib.Path
+        File to load metadata from.
+
+    Returns
+    -------
+    generator
+        Yields an ANVL record as a string.
+    """
+    with open(tsv_file, "r", encoding="utf-8") as fh:
+        keys = fh.readline().strip().split("\t")
+        for line in fh:
+            values = line.strip().split("\t")
+            md = dict(zip(keys, values))
+            anvl = build_anvl(
+                md["dc.creator"],
+                md["dc.title"],
+                md["dc.date"],
+                md["_target"],
+                type_=md["dc.type"]
+            )
+
+            yield anvl
+
+
+def load_anvl_as_dict_from_tsv(tsv_file):
+    """Creates a generator that yields ANVL dictionaries from a TSV.
+
+    Requires a tab-separated-values file with the following
+    headers: dc.creator, dc.title, dc.date, _target, and dc.type.
+
+    Parameters
+    ----------
+    tsv_file : str or pathlib.Path
+        File to load metadata from.
+
+    Returns
+    -------
+    generator
+        Yields an ANVL record as a dictionary.
+    """
+    for anvl in load_anvl_as_str_from_tsv(tsv_file):
+        yield anvl_to_dict(anvl)
+
+
 def upload_anvl(
     user_name, password, shoulder, anvl_text, action="mint", output_file=None
 ):
@@ -196,7 +260,7 @@ def upload_anvl(
 
     if output_file is not None:
         with open(output_file, "a", encoding="utf-8") as fh:
-            fh.write(f":: {ark}")
+            fh.write(f":: {ark}\n")
             fh.write(f"{anvl_text.strip()}\n")
 
     return ark
