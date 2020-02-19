@@ -206,7 +206,7 @@ def load_anvl_as_str_from_tsv(tsv_file):
     with open(tsv_file, "r", encoding="utf-8") as fh:
         keys = fh.readline().strip().split("\t")
         for line in fh:
-            values = line.strip().split("\t")
+            values = line.strip("\r\n").split("\t")
             md = dict(zip(keys, values))
             anvl = build_anvl(
                 md["dc.creator"],
@@ -251,7 +251,7 @@ def upload_anvl(
         request_url = "/".join([base_url, "id", shoulder])
 
     r = requests.post(
-        request_url, headers=headers, data=anvl_text, auth=(user_name, password)
+        request_url, headers=headers, data=anvl_text.encode("utf-8"), auth=(user_name, password)
     )
     ark = r.text[9:]
 

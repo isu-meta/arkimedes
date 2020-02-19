@@ -198,7 +198,7 @@ class Ark(Base):
         self.replaceable = (
             1
             if ark_dict.get("iastate.replaceable") == "True"
-            or input_is_replaceable(ark_dict["dc.title"])
+            or input_is_replaceable(ark_dict.get("dc.title", "NOT REPLACEABLE"))
             else 0
         )
 

@@ -3,11 +3,11 @@ import requests
 CONCAT_STRING = "\n---\n"
 
 
-def get_from_files(fs):
+def get_from_files(fs, encoding="utf-8"):
     files = []
     for f in fs:
-        with open(f, "r", encoding="utf-8") as fh:
-            content = fh.read(content)
+        with open(f, "r", encoding=encoding) as fh:
+            content = fh.read()
         files.append(content)
 
     return files
