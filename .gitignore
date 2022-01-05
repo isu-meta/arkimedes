@@ -1,10 +1,3 @@
-arkimedes_env/
-arki_env/
-env_arkimedes/
+**/*.egg-info
 **/__pycache__
-arkimedes.egg-info/
-*.txt
-*.sqlite
-*.zip
-*.whl
-*.pickle
+dist/**
