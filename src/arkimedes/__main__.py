@@ -103,7 +103,7 @@ Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
     parser.add_argument(
         "target",
         help="""After any 'mint-' argument, this must be an ARK shoulder. After
-'delete', 'update', or 'view', it must be an ARK. After 'batch' it may be
+'delete', 'update', or 'view', it must be an ARK. After 'batch-download' it may be
 any character or characters; a hyphen is recommended.""",
     )
     parser.add_argument("username", nargs="?", default="", help="EZID username.")
