@@ -32,6 +32,7 @@ from inspect import cleandoc
 from pathlib import Path
 import re
 import sys
+from typing import KeysView
 
 from sqlalchemy import Column, create_engine, Integer, String, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
@@ -171,11 +172,19 @@ class Ark(Base):
         -------
         None
         """
+        print(f"ARK string passed to db.from_anvl(): {anvl_string}")
         ark_dict = {
-            (p[0].strip() if p[0].strip() != "" else "success"): (
-                p[1].strip() if p[0].strip() != "" else p[1][2:].strip()
+            #EZID returns the ARK as :: ark/XYZ123, which will produce an
+            # empty key, so check and insert 'success' as the key when it's
+            # empty.
+            (part[0].strip() if part[0].strip() != "" else "success"): (
+                # The value will the part[1], but if it's the ARK, we'll need
+                # to strip off the leading colon left because line.split(':', 1)
+                # only splits at the first colon to avoid choking on ARK lines
+                # and URLs.
+                part[1].strip() if part[0].strip() != "" else part[1].lstrip(":").strip()
             )
-            for p in [l.split(":", 1) for l in anvl_string.split("\n") if l != ""]
+            for part in [line.split(":", 1) for line in anvl_string.split("\n") if line != ""]
         }
 
         self.ark = ark_dict.get("success", "")
@@ -408,23 +417,25 @@ def find_url(url, session=None):
 def input_is_replaceable(title):
     """Determine of an ARK can be replaced with a new target.
 
-    Occassionally, ARKs have been created for children of a compound object.
-    On their own, these ARKs serve no useful purpose. Instead of leaving them,
-    we can mark them as replaceable so that we can update already-minted ARKs
-    with entirely new metadata and avoid wasting our ARKs.
+    Occassionally, ARKs have been created for children of a compound object or
+    otherwise created by mistake. On their own, these ARKs serve no useful
+    purpose. Instead of leaving them, we can mark them as replaceable so that
+    we can update already-minted ARKs with entirely new metadata and avoid
+    wasting our ARKs.
 
     Parameters
     ----------
     title : str
         The title of the object in the ARK record. Child objects that don't
         need their own ARKs can be identified by titles like 'Front', 'Back',
-        'Page 2', 'p. 7', and even ''.
+        'Page 2', 'p. 7', and even ''. ARKs marked for reuse on via in EZID
+        have the title REUSE.
     
     Returns
     -------
     bool
     """
-    bad_title = re.compile(r"(^([Pp](age|\.) \d+|[Ff]ront|[Bb]ack)$|^$)")
+    bad_title = re.compile(r"(^([Pp](age|\.) \d+|[Ff]ront|[Bb]ack|REUSE)$)|^$")
 
     return bool(bad_title.match(title))
 
@@ -472,7 +483,7 @@ def load_anvl_file_into_db(batch_file, engine=engine, verbose=True):
             ownergroup=a.get("_ownergroup", ""),
             created=int(a.get("_created", 0)),
             updated=int(a.get("_updated", 0)),
-            export=False if a.get("_export") == "no" else True,
+            export=not a.get("_export") == "no",
             dc_creator=a.get("dc.creator", ""),
             dc_title=a.get("dc.title", ""),
             dc_type=a.get("dc.type", ""),
@@ -481,10 +492,7 @@ def load_anvl_file_into_db(batch_file, engine=engine, verbose=True):
             erc_when=a.get("erc.when", ""),
             erc_what=a.get("erc.what", ""),
             erc_who=a.get("erc.who", ""),
-            replaceable=True
-            if a.get("iastate.replaceable") == "True"
-            or input_is_replaceable(a["dc.title"])
-            else False,
+            replaceable=a.get("iastate.replaceable") == "True" or input_is_replaceable(a["dc.title"])
         )
 
         session.add(ark_obj)

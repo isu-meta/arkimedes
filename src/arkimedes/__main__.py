@@ -45,7 +45,7 @@ class MissingArgumentError(Exception):
     pass
 
 
-def add_ark_to_db(args, ark, anvl):
+def add_ark_to_db(args, ark):
     ezid_anvl = view_anvl(args.username, args.password, ark, False)
     ark_obj = Ark()
     ark_obj.from_anvl(ezid_anvl)
@@ -82,7 +82,7 @@ def upload(args, anvl, action):
     )
 
     if action == "mint":
-        add_ark_to_db(args, ark, anvl)
+        add_ark_to_db(args, ark)
     else:
         anvl_dict = anvl_to_dict(anvl)
         update_db_record(ark, anvl_dict)
@@ -96,7 +96,7 @@ def main():
         "action",
         help="""Action to take. Accepted arguments are: 'batch-download', 'delete',
 'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update', and
- 'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
+'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
 from EAD XML. 'mint-conservation-report' mints new ARKs from Conservation
 Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
     )
@@ -110,10 +110,16 @@ any character or characters; a hyphen is recommended.""",
     parser.add_argument("password", nargs="?", default="", help="EZID password.")
     parser.add_argument(
         "--batch-args",
-        nargs="+",
-        help="""Additional arguments for batch downloads in 'arg=value' format.
-For a full list of available options, see: 
-https://ezid.cdlib.org/doc/apidoc.html#parameters""",
+        help="""Additional arugments to be passed to the EZID API. MUST be in
+'&key=value' format. For a full list of available options, see: 
+https://ezid.cdlib.org/doc/apidoc.html#parameters
+
+This argument is required if requesting a CSV from the EZID API. Pass headers to use
+with CSV batch download like so: '&column=dc.creator&column=dc.title...', replacing
+the column header titles with the ones you want. EZID will only return columns for
+specified headers. For full details on the CSV column headers accepted by the API,
+please refer to their documentation: https://ezid.cdlib.org/doc/apidoc.html#download-formats
+""",
     )
     parser.add_argument(
         "--batch-compression",

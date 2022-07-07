@@ -42,7 +42,13 @@ def anvl_to_dict(anvl):
     return ark_dict
 
 
-def batch_download(username, password, format_="anvl", compression="zip", *args):
+def batch_download(
+    username,
+    password,
+    format_="anvl",
+    compression="zip",
+    args=""
+    ):
     """Batch download ARKs from EZID.
 
     Parameters:
@@ -53,11 +59,13 @@ def batch_download(username, password, format_="anvl", compression="zip", *args)
         EZID password.
     format_ : str
         Valid inputs are 'anvl', 'csv', or 'xml'. Defaults to 'anvl'.
+        CSV requests require
     compression : str
         Valid inputs are 'gzip' or 'zip'. Defaults to 'zip'.
-    *args : str
-        String(s) to pass to EZID API. Strings should follow the 
-        format 'key=value'. A full list of parameters can be found here:
+    args : str
+        String to pass to EZID API. Strings should follow the 
+        format '&key=value&key=value...'. A full list of parameters
+        can be found here:
         https://ezid.cdlib.org/doc/apidoc.html#parameters
 
     Returns
@@ -66,33 +74,51 @@ def batch_download(username, password, format_="anvl", compression="zip", *args)
     """
     url = "https://ezid.cdlib.org/download_request"
     headers = {"Content-type": "application/x-www-form-urlencoded"}
-    query = f"format={format_}&compression={compression}&{'&'.join(args)}"
+    query = f"format={format_}&compression={compression}{args}"
+
+    print(query)
 
     r = requests.post(url, data=query, auth=(username, password), headers=headers)
 
     if not r.ok or not r.text.startswith("success: "):
-        print(f"Request failure!\n----------------\n\n{r.text}")
-        sys.exit(1)
+        print(f"Request failure!\n----------------\n{r.status_code}: {r.text}\n")
 
-    print("Downloading ARK records from EZID..", end="")
+        if format_ == "csv":
+            print("""CSV requests must include headers for the columns you're
+requesting. They may be passed to arkimedes with the '---batch-args' flag
+and must be formatted like so: '&column=dc.title&column=dc.creator...',
+replacing the column names with the headers you want. For a full overview
+of possible headers, please refer to EZID's documentation:
+https://ezid.cdlib.org/doc/apidoc.html#download-formats
+""") 
+
+        sys.exit(1)
 
     url = r.text[9:]
     file_name = url[url.rfind("/") + 1 :]
+
+    print(f"Acquired download URL: {url}")
+    print("It may take EZID a few seconds to prepare the file.")
+    print("Waiting on EZID..", end="")
     r = requests.get(url)
-    while True:
+    sleep_count = 0
+    # It usually takes a few seconds for EZID to prepare a metadata download.
+    # Check for 2 minutes before giving up.
+    while sleep_count < 24:
         print(".", end="", flush=True)
         r = requests.get(url)
         if r.status_code == 200:
             with open(file_name, "wb") as fh:
                 fh.write(r.content)
             break
-        
+
         sleep(5)
+        sleep_count += 1
 
     if r.status_code == 200:
         print(file_name)
     else:
-        print(f"Download failed\nurl: {url}")
+        print(f"Download failed.\nTry downloading manually from: {url}")
 
 
 def build_anvl(
@@ -213,11 +239,14 @@ def load_anvl_as_str_from_tsv(tsv_file):
         for line in fh:
             values = line.strip("\r\n").split("\t")
             md = dict(zip(keys, values))
+            if "dc.publisher" not in md.keys():
+                md["dc.publisher"] = "Iowa State University Library"
             anvl = build_anvl(
                 md["dc.creator"],
                 md["dc.title"],
                 md["dc.date"],
                 md["_target"],
+                md["dc.publisher"],
                 type_=md["dc.type"]
             )
 
