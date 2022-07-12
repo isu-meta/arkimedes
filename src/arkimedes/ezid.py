@@ -76,8 +76,6 @@ def batch_download(
     headers = {"Content-type": "application/x-www-form-urlencoded"}
     query = f"format={format_}&compression={compression}{args}"
 
-    print(query)
-
     r = requests.post(url, data=query, auth=(username, password), headers=headers)
 
     if not r.ok or not r.text.startswith("success: "):
@@ -98,13 +96,13 @@ https://ezid.cdlib.org/doc/apidoc.html#download-formats
     file_name = url[url.rfind("/") + 1 :]
 
     print(f"Acquired download URL: {url}")
-    print("It may take EZID a few seconds to prepare the file.")
+    print("It may take EZID a few minutes to prepare the file.")
     print("Waiting on EZID..", end="")
     r = requests.get(url)
     sleep_count = 0
-    # It usually takes a few seconds for EZID to prepare a metadata download.
-    # Check for 2 minutes before giving up.
-    while sleep_count < 24:
+    # It up to 3 minutes for EZID to prepare a batch download.
+    # Check every 5 seconds for 5 minutes before giving up.
+    while sleep_count < 60:
         print(".", end="", flush=True)
         r = requests.get(url)
         if r.status_code == 200:
@@ -215,7 +213,7 @@ def load_anvl_as_str(anvl_file):
     """
     
     with open(anvl_file, "r", encoding="utf-8") as fh:
-        return [anvl for anvl in fh.read().split("\n\n")]
+        return list(fh.read().split("\n\n"))
 
 
 def load_anvl_as_str_from_tsv(tsv_file):
