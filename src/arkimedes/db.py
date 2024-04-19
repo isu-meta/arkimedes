@@ -41,7 +41,7 @@ from sqlalchemy.orm import sessionmaker
 from arkimedes.config import DB_CONN, DB_TYPE, SQLITE_FILE
 from arkimedes.ezid import load_anvl_as_dict, load_anvl_as_str
 
-engine = create_engine(DB_CONN)
+engine = create_engine(DB_CONN, pool_size=20, max_overflow=40)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -161,7 +161,7 @@ class Ark(Base):
 
     def from_anvl(self, anvl_string):
         """Populate attributes from a single-record ANVL string.
-        
+
         Parameters
         ----------
         anvl_string : str
