@@ -37,7 +37,8 @@ def anvl_to_dict(anvl):
     for line in anvl.split("\n"):
         if line.startswith("::"):
             ark_dict["ark"] = line[3:]
-        else:
+        elif line.strip() != "":
+            # limit the split to only the first colon to not mangle URIs
             k, v = line.split(":", 1)
             ark_dict[k.strip()] = v.strip()
 
@@ -450,8 +451,6 @@ def query(
     create_times = tree.xpath("//td[@class='c_create_time']/a/text()")
     update_times = tree.xpath("//td[@class='c_update_time']/a/text()")
     id_statuses = tree.xpath("//td[@class='c_id_status']/a/text()")
-
-    print(r.text)
 
     results = (
         dict(

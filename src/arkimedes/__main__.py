@@ -134,6 +134,8 @@ available, a new ARK will be minted.""",
     reuseables = None
     if args.reuse:
         reusables = find_resusable(args.username, args.password)
+    else:
+        reusables = (x for x in [])
 
     if args.action == "mint-anvl":
         # Support multiple ANVL strings or files in args.source
