@@ -1,6 +1,6 @@
 """A command-line script for managing ARKs with the arkimedes library
 
-``arkimedes.py`` provides a command-line script for working with the 
+``arkimedes.py`` provides a command-line script for working with the
 ARKimedes Python library, a library created to manage the creation
 and maintenance of ARKs for the Iowa State University Library.
 
@@ -17,21 +17,12 @@ password to be provided.
 import argparse
 
 from arkimedes import get_sources
-from arkimedes.db import (
-    add_to_db,
-    Ark,
-    create_db,
-    db_exists,
-    engine,
-    find_replaceable,
-    find_url,
-    update_db_record,
-    url_is_in_db,
-)
 from arkimedes.ead import generate_anvl_from_ead_xml
 from arkimedes.ezid import (
     anvl_to_dict,
     batch_download,
+    find_reusable,
+    find_url,
     get_value_from_anvl_string,
     load_anvl_as_str,
     load_anvl_as_str_from_tsv,
@@ -45,32 +36,27 @@ class MissingArgumentError(Exception):
     pass
 
 
-def add_ark_to_db(args, ark):
-    ezid_anvl = view_anvl(args.username, args.password, ark, False)
-    ark_obj = Ark()
-    ark_obj.from_anvl(ezid_anvl)
-    add_to_db(ark_obj)
-
-
-def submit_md(args, anvl):
+def submit_md(args, anvl, reusables=(x for x in [])):
     if args.action == "update":
         upload(args, anvl, "update")
     else:
         url = get_value_from_anvl_string("_target", anvl)
 
-        if url_is_in_db(url):
+        try:
+            found = next(find_url(url, args.username, args.password))
+        except StopIteration:
+            found = None
+
+        if found is not None:
             print(f"An ARK has already been minted for {url}.\n")
-            ark_obj = find_url(url).first()
-            view_anvl(args.username, args.password, ark_obj.ark)
+            view_anvl(args.username, args.password, found["ark"])
         else:
             if args.reuse:
-                replaceable = find_replaceable().first()
-
-                if replaceable is not None:
-                    args.target = replaceable.ark
+                try:
+                    resusable = next(resusables)
+                    args.target = resusable["ark"]
                     upload(args, anvl, "update")
-                    update_db_record(replaceable.ark, {"iastate.replaceable": False})
-                else:
+                except StopIteration:
                     upload(args, anvl, "mint")
             else:
                 upload(args, anvl, "mint")
@@ -80,12 +66,6 @@ def upload(args, anvl, action):
     ark = upload_anvl(
         args.username, args.password, args.target, anvl, action, args.out
     )
-
-    if action == "mint":
-        add_ark_to_db(args, ark)
-    else:
-        anvl_dict = anvl_to_dict(anvl)
-        update_db_record(ark, anvl_dict)
     return ark
 
 
@@ -96,7 +76,7 @@ def main():
         "action",
         help="""Action to take. Accepted arguments are: 'batch-download', 'delete',
 'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update', and
-'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs 
+'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs
 from EAD XML. 'mint-conservation-report' mints new ARKs from Conservation
 Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
     )
@@ -111,7 +91,7 @@ any character or characters; a hyphen is recommended.""",
     parser.add_argument(
         "--batch-args",
         help="""Additional arugments to be passed to the EZID API. MUST be in
-'&key=value' format. For a full list of available options, see: 
+'&key=value' format. For a full list of available options, see:
 https://ezid.cdlib.org/doc/apidoc.html#parameters
 
 This argument is required if requesting a CSV from the EZID API. Pass headers to use
@@ -144,15 +124,16 @@ the default format 'anvl' is used.""",
         "--reuse",
         action="store_true",
         help="""When this flag is used with an action that mints a new ARK,
-arkimedes will reuse an ARK record that's been marked replaceable, if one
-is available, rather than minting a new ARK. If no replaceable record is 
+arkimedes will reuse an ARK record that's been marked resusable, if one
+is available, rather than minting a new ARK. If no resusable record is
 available, a new ARK will be minted.""",
     )
 
     args = parser.parse_args()
 
-    if not db_exists():
-        create_db(engine)
+    reuseables = None
+    if args.reuse:
+        reusables = find_resusable(args.username, args.password)
 
     if args.action == "mint-anvl":
         # Support multiple ANVL strings or files in args.source
@@ -161,18 +142,18 @@ available, a new ARK will be minted.""",
             if "\n" in anvl:
                 # Support multiple records in a single ANVL string
                 for a in anvl.split("\n\n"):
-                    submit_md(args, a)
+                    submit_md(args, a, reusables)
             else:
                 # Support multiple records in a single ANVL string
                 for a in load_anvl_as_str(anvl):
-                    submit_md(args, a)
+                    submit_md(args, a, reusables)
     elif args.action == "mint-ead":
         ead_xml = get_sources(args.source)
 
         anvls = generate_anvl_from_ead_xml(ead_xml)
 
         for anvl in anvls:
-            submit_md(args, anvl)
+            submit_md(args, anvl, reuseables)
     elif args.action == "mint-conservation-report":
         pdfs = get_sources(args.source)
         pdf_data = zip(pdfs, args.source)
@@ -180,11 +161,11 @@ available, a new ARK will be minted.""",
         anvls = generate_anvl_from_conservation_reports(pdf_data)
 
         for anvl in anvls:
-            submit_md(args, anvl)
+            submit_md(args, anvl, reusables)
     elif args.action == "mint-tsv":
         for source in args.source:
             for anvl in load_anvl_as_str_from_tsv(source):
-                submit_md(args, anvl)
+                submit_md(args, anvl, reusables)
 
     elif args.action == "batch-download":
         format_ = "anvl"

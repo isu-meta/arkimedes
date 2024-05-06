@@ -1,7 +1,9 @@
 from inspect import cleandoc
+from itertools import zip_longest
 import sys
 from time import sleep
 
+from lxml import etree
 import requests
 
 def anvls_to_dict(anvls):
@@ -63,7 +65,7 @@ def batch_download(
     compression : str
         Valid inputs are 'gzip' or 'zip'. Defaults to 'zip'.
     args : str
-        String to pass to EZID API. Strings should follow the 
+        String to pass to EZID API. Strings should follow the
         format '&key=value&key=value...'. A full list of parameters
         can be found here:
         https://ezid.cdlib.org/doc/apidoc.html#parameters
@@ -88,7 +90,7 @@ and must be formatted like so: '&column=dc.title&column=dc.creator...',
 replacing the column names with the headers you want. For a full overview
 of possible headers, please refer to EZID's documentation:
 https://ezid.cdlib.org/doc/apidoc.html#download-formats
-""") 
+""")
 
         sys.exit(1)
 
@@ -151,6 +153,16 @@ def convert_anvl_file_to_tsv(anvl_file, tsv_file):
             fh.write("\n")
 
 
+def find_reusable(username, password):
+    results = query(title="reuse", username=username, password=password)
+    return results
+
+
+def find_url(url, username, password):
+    results = query(target=url, username=username, password=password)
+    return results
+
+
 def generate_anvl_strings(data_source, parser, output_file):
     anvls = []
 
@@ -161,7 +173,7 @@ def generate_anvl_strings(data_source, parser, output_file):
         with open(output_file, "w", encoding="utf-8") as fh:
             for a in anvls:
                 fh.write(f"{a}\n")
-    
+
     return anvls
 
 
@@ -211,7 +223,7 @@ def load_anvl_as_str(anvl_file):
     list
         List of ARK records as a string.
     """
-    
+
     with open(anvl_file, "r", encoding="utf-8") as fh:
         return list(fh.read().split("\n\n"))
 
@@ -271,8 +283,209 @@ def load_anvl_as_dict_from_tsv(tsv_file):
         yield anvl_to_dict(anvl)
 
 
+def login(username, password):
+    """Login to the EZID website.
+
+    Parameters
+    ----------
+    username : str
+    password : str
+
+    Returns
+    -------
+    requests.Session() object
+    """
+    s = requests.Session()
+    # Need to spoof the User-Agent to avoid getting a 405 error
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"}
+    payload = {"next": "/", "username": username, "password": password,}
+    s.post("https://ezid.cdlib.org/login", data=payload, headers=headers)
+    return s
+
+
+def query(
+        *,
+        ps=1000,
+        order_by="c_update_time",
+        sort_="asc",
+        owner_selected="user_iastate_lib",
+        c_title="t",
+        c_creator="t",
+        c_identifier="t",
+        c_owner="t",
+        c_create_time="t",
+        c_update_time="t",
+        c_id_status="t",
+        keywords="",
+        identifier="",
+        title="",
+        creator="",
+        publisher="",
+        pubyear_from="",
+        pubyear_to="",
+        object_type="",
+        target="",
+        id_type="",
+        create_time_from="",
+        create_time_to="",
+        update_time_from="",
+        update_time_to="",
+        id_status="",
+        username,
+        password,
+):
+    """Search for ARKs by metadata.
+
+    Since the EZID API lacks any search functionality beyond
+    retrieving metadata for specific ARKs (for some horrible reason,)
+    this function searches the via the manage interface on the
+    EZID website.
+
+    The search returns at most the number of records specified in `ps`.
+    There is currently no functionality to verify whether or not there
+    are more matching records than specified in `ps` nor to return
+    all matching records if the number of matches is higher than `ps`.
+
+    Parameters
+    ----------
+    ps : int
+        Defaults to 1000
+    order_by : str
+        Defaults to "c_update_time"
+    sort_ : str
+        Defaults to "asc"
+    owner_selected : str
+        Defaults to "t"
+    c_title : str
+        Defaults to "t"
+    c_creator : str
+        Defaults to "t"
+    c_identifier : str
+        Defaults to "t"
+    c_owner : str
+        Defaults to "t"
+    c_create_time : str
+        Defaults to "t"
+    c_update_time : str
+        Defaults to "t"
+    c_id_status : str
+        Defaults to "t"
+    keywords : str
+        Defaults to ""
+    identifier : str
+        Defaults to ""
+    title : str
+        Defaults to ""
+    creator : str
+        Defaults to ""
+    publisher : str
+        Defaults to ""
+    pubyear_from : str
+        Defaults to ""
+    pubyear_to : str
+        Defaults to ""
+    object_type : str
+        Defaults to ""
+    target : str
+        Defaults to ""
+    id_type : str
+        Defaults to ""
+    create_time_from : str
+        Defaults to ""
+    create_time_to : str
+        Defaults to ""
+    update_time_from : str
+        Defaults to ""
+    update_time_to : str
+        Defaults to ""
+    id_status : str
+        Defaults to ""
+    username : str
+    password : str
+
+    Returns
+    -------
+    generator
+        Yields a dictionary with the fields "title", "creator", "ark",
+        "owner", "create_time", "update_time", and "id_status"
+    """
+    url = "https://ezid.cdlib.org/manage"
+    query = {
+        "ps": ps,
+        "order_by": order_by,
+        "sort": sort_,
+        "owner_selected": owner_selected,
+        "c_title": c_title,
+        "c_creator": c_creator,
+        "c_identifier": c_identifier,
+        "c_owner": c_owner,
+        "c_create_time": c_create_time,
+        "c_update_time": c_update_time,
+        "c_id_status": c_id_status,
+        "keywords": keywords,
+        "identifier": identifier,
+        "title": title,
+        "creator": creator,
+        "publisher": publisher,
+        "pubyear_from": pubyear_from,
+        "pubyear_to": pubyear_to,
+        "object_type": object_type,
+        "target": target,
+        "id_type": id_type,
+        "create_time_from": create_time_from,
+        "create_time_to": create_time_to,
+        "update_time_from": update_time_from,
+        "update_time_to": update_time_to,
+        "id_status": id_status,
+    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"}
+
+    s = login(username, password)
+    r = s.get(url, params=query, headers=headers)
+    tree = etree.HTML(r.text)
+    titles = tree.xpath("//td[@class='c_title']/a/text()")
+    creators = tree.xpath("//td[@class='c_creator']/a/text()")
+    identifiers = tree.xpath("//td[@class='c_identifier']/a/text()")
+    owners = tree.xpath("//td[@class='c_owner']/a/text()")
+    create_times = tree.xpath("//td[@class='c_create_time']/a/text()")
+    update_times = tree.xpath("//td[@class='c_update_time']/a/text()")
+    id_statuses = tree.xpath("//td[@class='c_id_status']/a/text()")
+
+    print(r.text)
+
+    results = (
+        dict(
+            zip(
+                (
+                    "creator",
+                    "title",
+                    "ark",
+                    "owner",
+                    "created",
+                    "updated",
+                    "id_status"
+                ),
+                row
+            )
+        )
+        for row
+        in zip_longest(
+            creators,
+            titles,
+            identifiers,
+            owners,
+            create_times,
+            update_times,
+            id_statuses,
+            fillvalue=""
+        )
+    )
+
+    return results
+
+
 def upload_anvl(
-    user_name, password, shoulder, anvl_text, action="mint", output_file=None
+    username, password, shoulder, anvl_text, action="mint", output_file=None
 ):
     base_url = "https://ezid.cdlib.org"
     headers = {"Content-Type": "text/plain; charset=UTF-8"}
@@ -283,7 +496,7 @@ def upload_anvl(
         request_url = "/".join([base_url, "id", shoulder])
 
     r = requests.post(
-        request_url, headers=headers, data=anvl_text.encode("utf-8"), auth=(user_name, password)
+        request_url, headers=headers, data=anvl_text.encode("utf-8"), auth=(username, password)
     )
     ark = r.text[9:]
 
@@ -298,10 +511,10 @@ def upload_anvl(
     return ark
 
 
-def view_anvl(user_name, password, ark, print_=True):
+def view_anvl(username, password, ark, print_=True):
     base_url = "https://ezid.cdlib.org/id"
     request_url = "/".join([base_url, ark])
-    r = requests.get(request_url, auth=(user_name, password))
+    r = requests.get(request_url, auth=(username, password))
 
     if print_:
         print(r.text)
