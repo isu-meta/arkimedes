@@ -50,11 +50,12 @@ def submit_md(args, anvl, reusables=(x for x in [])):
         if found is not None:
             print(f"An ARK has already been minted for {url}.\n")
             view_anvl(args.username, args.password, found["ark"])
+            print("No new ARK minted.")
         else:
             if args.reuse:
                 try:
-                    resusable = next(resusables)
-                    args.target = resusable["ark"]
+                    reusable = next(reusables)
+                    args.target = reusable["ark"]
                     upload(args, anvl, "update")
                 except StopIteration:
                     upload(args, anvl, "mint")
@@ -124,8 +125,8 @@ the default format 'anvl' is used.""",
         "--reuse",
         action="store_true",
         help="""When this flag is used with an action that mints a new ARK,
-arkimedes will reuse an ARK record that's been marked resusable, if one
-is available, rather than minting a new ARK. If no resusable record is
+arkimedes will reuse an ARK record that's been marked reusable, if one
+is available, rather than minting a new ARK. If no reusable record is
 available, a new ARK will be minted.""",
     )
 
@@ -133,7 +134,7 @@ available, a new ARK will be minted.""",
 
     reuseables = None
     if args.reuse:
-        reusables = find_resusable(args.username, args.password)
+        reusables = find_reusable(args.username, args.password)
     else:
         reusables = (x for x in [])
 
