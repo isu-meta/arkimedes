@@ -332,6 +332,7 @@ def query(
         update_time_from="",
         update_time_to="",
         id_status="",
+        p=1,
         username,
         password,
 ):
@@ -401,6 +402,8 @@ def query(
         Defaults to ""
     id_status : str
         Defaults to ""
+    p : int
+        Defaults to 1
     username : str
     password : str
 
@@ -438,19 +441,55 @@ def query(
         "update_time_from": update_time_from,
         "update_time_to": update_time_to,
         "id_status": id_status,
+        "p": p,
     }
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"}
 
+    titles = []
+    creators = []
+    identifiers = []
+    owners = []
+    create_times = []
+    update_times = []
+    id_statuses = []
+
     s = login(username, password)
-    r = s.get(url, params=query, headers=headers)
-    tree = etree.HTML(r.text)
-    titles = tree.xpath("//td[@class='c_title']/a/text()")
-    creators = tree.xpath("//td[@class='c_creator']/a/text()")
-    identifiers = tree.xpath("//td[@class='c_identifier']/a/text()")
-    owners = tree.xpath("//td[@class='c_owner']/a/text()")
-    create_times = tree.xpath("//td[@class='c_create_time']/a/text()")
-    update_times = tree.xpath("//td[@class='c_update_time']/a/text()")
-    id_statuses = tree.xpath("//td[@class='c_id_status']/a/text()")
+
+    titles_xpath = "//td[@class='c_title']/a/text()"
+    creators_xpath = "//td[@class='c_creator']/a/text()"
+    identifiers_xpath = "//td[@class='c_identifier']/a/text()"
+    owners_xpth = "//td[@class='c_owner']/a/text()"
+    create_times_xpath = "//td[@class='c_create_time']/a/text()"
+    update_times_xpath = "//td[@class='c_update_time']/a/text()"
+    id_statuses_xpath = "//td[@class='c_id_status']/a/text()"
+
+    def get_all_results():
+        r = s.get(url, params=query, headers=headers)
+        tree = etree.HTML(r.text)
+
+        rp = tree.xpath("string(//input[@id='page-directselect-bottom']/@max/text())")
+
+        titles = tree.xpath(titles_xpath)
+        creators = tree.xpath(creators_xpath)
+        identifiers = tree.xpath(idenfiers_xpath)
+        owners = tree.xpath(owners_xpath)
+        create_times = tree.xpath(create_times_xpath)
+        update_times = tree.xpath(update_times_xpath)
+        id_statuses = tree.xpath(id_statuses xpath)
+
+        return rp
+
+    result_pages = rp
+
+    if result_pages:
+        max_pages = int(result_pages)
+        p = 2
+
+        while p <= max_pages:
+            query["p"] = p
+            get_all_results()
+            tree = etree.HTML(r.text)
+            p += 1
 
     results = (
         dict(
@@ -479,6 +518,8 @@ def query(
             fillvalue=""
         )
     )
+
+    # https://ezid.cdlib.org/manage?filtered=t&ps=10&order_by=c_update_time&sort=asc&owner_selected=user_iastate_lib&c_title=t&c_creator=t&c_identifier=t&c_owner=t&c_create_time=t&c_update_time=t&c_id_status=t&keywords=reuse&identifier=&title=&creator=&publisher=&pubyear_from=&pubyear_to=&object_type=&target=&id_type=&create_time_from=&create_time_to=&update_time_from=&update_time_to=&id_status=&p=2
 
     return results
 
