@@ -15,6 +15,7 @@ password to be provided.
 
 """
 import argparse
+import re
 
 from arkimedes import get_sources
 from arkimedes.ead import generate_anvl_from_ead_xml
@@ -37,15 +38,19 @@ class MissingArgumentError(Exception):
 
 
 def submit_md(args, anvl, reusables=(x for x in [])):
-    if args.action == "update":
+    reusable_p = re.compile(r"^reuse$", re.I)
+    if "update" in args.action:
         upload(args, anvl, "update")
     else:
-        url = get_value_from_anvl_string("_target", anvl)
-
-        try:
-            found = next(find_url(url, args.username, args.password))
-        except StopIteration:
+        if args.no_url_check:
             found = None
+        else:
+            url = get_value_from_anvl_string("_target", anvl)
+
+            try:
+                found = next(find_url(url, args.username, args.password))
+            except StopIteration:
+                found = None
 
         if found is not None:
             print(f"An ARK has already been minted for {url}.\n")
@@ -54,9 +59,18 @@ def submit_md(args, anvl, reusables=(x for x in [])):
         else:
             if args.reuse:
                 try:
-                    reusable = next(reusables)
-                    args.target = reusable["ark"]
-                    upload(args, anvl, "update")
+                    # If any titles include "reuse", but aren't only that word,
+                    # we want to skip them, so this loop checks that a title
+                    # contains only "reuse". It processes the ARK submission
+                    # if it is a reusable ARK and ends the loop and if the
+                    # ARK isn't reusable, it skips it and checks the next one
+                    # until if finds a suitable match.
+                    while True:
+                        reusable = next(reusables)
+                        if reuseable_p.match(reusable["title"].strip()):
+                            args.target = reusable["ark"]
+                            upload(args, anvl, "update")
+                            break
                 except StopIteration:
                     upload(args, anvl, "mint")
             else:
@@ -76,16 +90,20 @@ def main():
     parser.add_argument(
         "action",
         help="""Action to take. Accepted arguments are: 'batch-download', 'delete',
-'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update', and
-'view'. 'mint-anvl' mints new ARKs from ANVL metadata and 'mint-ead' mints ARKs
-from EAD XML. 'mint-conservation-report' mints new ARKs from Conservation
-Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
+'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update',
+"update-tsv", "query", and 'view'. 'mint-anvl' mints new ARKs from ANVL metadata
+and 'mint-ead' mints ARKs from EAD XML. 'mint-conservation-report' mints new ARKs
+from Conservation Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
     )
     parser.add_argument(
         "target",
         help="""After any 'mint-' argument, this must be an ARK shoulder. After
 'delete', 'update', or 'view', it must be an ARK. After 'batch-download' it may be
-any character or characters; a hyphen is recommended.""",
+any character or characters; a hyphen is recommended. After 'query' it should be a
+the search terms you wish to use surrounded by quotation marks. A plain search
+string will search keywords, but you may preface your search terms with a specific
+field to search, separated from the terms with a colon. For example: `title:Letter
+from Person A to Person B`.""",
     )
     parser.add_argument("username", nargs="?", default="", help="EZID username.")
     parser.add_argument("password", nargs="?", default="", help="EZID password.")
@@ -114,7 +132,7 @@ Accepted values are 'anvl', 'csv', and 'xml'. If this argument is not given,
 the default format 'anvl' is used.""",
     )
     parser.add_argument(
-        "--out", help="Output file for recording EZID API response."
+        "--out", help="Output file."
     )
     parser.add_argument(
         "--source",
@@ -128,6 +146,16 @@ the default format 'anvl' is used.""",
 arkimedes will reuse an ARK record that's been marked reusable, if one
 is available, rather than minting a new ARK. If no reusable record is
 available, a new ARK will be minted.""",
+    )
+    parser.add_argument(
+        "--no-url-check",
+        action="store_true",
+        help="""When this flag is used with an action that mints a new ARK,
+arkimedes will skip checking whether an ARK already exists for the URL.
+
+WARNING: Use this flag only when creating ARKs for newly created digital objects
+where no previous URL could exist. When minting ARKs for objects that already
+exist always check the URLs as part of the minting process."""
     )
 
     args = parser.parse_args()
@@ -192,8 +220,28 @@ available, a new ARK will be minted.""",
     elif args.action == "update":
         for anvl in args.source:
             submit_md(args, anvl)
+    elif args.action == "update-tsv":
+        for source in args.source:
+            for anvl in load_anvl_as_str_from_tsv(source):
+                submit_md(args, anvl)
+
     elif args.action == "view":
         view_anvl(args.username, args.password, args.target)
+    elif args.action == "query":
+        if ":" in args.query:
+            q = dict((args.query.split(":"),))
+            results = query(**q, username=args.username, password=args.password)
+        else:
+            results = query(keywords=args.query, username=args.username, password=args.password)
+
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as fh:
+                for r in results:
+                    fh.write(r)
+                    fh.write("\n")
+        else:
+            for r in results:
+                print(r)
 
 
 if __name__ == "__main__":
