@@ -14,6 +14,7 @@ password to be provided.
 
 
 """
+
 import argparse
 import re
 
@@ -27,6 +28,7 @@ from arkimedes.ezid import (
     get_value_from_anvl_string,
     load_anvl_as_str,
     load_anvl_as_str_from_tsv,
+    query,
     upload_anvl,
     view_anvl,
 )
@@ -67,7 +69,7 @@ def submit_md(args, anvl, reusables=(x for x in [])):
                     # until if finds a suitable match.
                     while True:
                         reusable = next(reusables)
-                        if reuseable_p.match(reusable["title"].strip()):
+                        if reusable_p.match(reusable["title"].strip()):
                             args.target = reusable["ark"]
                             upload(args, anvl, "update")
                             break
@@ -105,8 +107,12 @@ string will search keywords, but you may preface your search terms with a specif
 field to search, separated from the terms with a colon. For example: `title:Letter
 from Person A to Person B`.""",
     )
-    parser.add_argument("username", nargs="?", default="", help="EZID username.")
-    parser.add_argument("password", nargs="?", default="", help="EZID password.")
+    parser.add_argument(
+        "username", nargs="?", default="", help="EZID username."
+    )
+    parser.add_argument(
+        "password", nargs="?", default="", help="EZID password."
+    )
     parser.add_argument(
         "--batch-args",
         help="""Additional arugments to be passed to the EZID API. MUST be in
@@ -131,9 +137,7 @@ please refer to their documentation: https://ezid.cdlib.org/doc/apidoc.html#down
 Accepted values are 'anvl', 'csv', and 'xml'. If this argument is not given,
 the default format 'anvl' is used.""",
     )
-    parser.add_argument(
-        "--out", help="Output file."
-    )
+    parser.add_argument("--out", help="Output file.")
     parser.add_argument(
         "--source",
         nargs="+",
@@ -155,12 +159,12 @@ arkimedes will skip checking whether an ARK already exists for the URL.
 
 WARNING: Use this flag only when creating ARKs for newly created digital objects
 where no previous URL could exist. When minting ARKs for objects that already
-exist always check the URLs as part of the minting process."""
+exist always check the URLs as part of the minting process.""",
     )
 
     args = parser.parse_args()
 
-    reuseables = None
+    reusables = None
     if args.reuse:
         reusables = find_reusable(args.username, args.password)
     else:
@@ -184,7 +188,7 @@ exist always check the URLs as part of the minting process."""
         anvls = generate_anvl_from_ead_xml(ead_xml)
 
         for anvl in anvls:
-            submit_md(args, anvl, reuseables)
+            submit_md(args, anvl, reusables)
     elif args.action == "mint-conservation-report":
         pdfs = get_sources(args.source)
         pdf_data = zip(pdfs, args.source)
@@ -210,7 +214,11 @@ exist always check the URLs as part of the minting process."""
 
         if args.batch_args is not None:
             batch_download(
-                args.username, args.password, format_, compression, args.batch_args
+                args.username,
+                args.password,
+                format_,
+                compression,
+                args.batch_args,
             )
         else:
             batch_download(args.username, args.password, format_, compression)
@@ -230,9 +238,15 @@ exist always check the URLs as part of the minting process."""
     elif args.action == "query":
         if ":" in args.query:
             q = dict((args.query.split(":"),))
-            results = query(**q, username=args.username, password=args.password)
+            results = query(
+                **q, username=args.username, password=args.password
+            )
         else:
-            results = query(keywords=args.query, username=args.username, password=args.password)
+            results = query(
+                keywords=args.query,
+                username=args.username,
+                password=args.password,
+            )
 
         if args.out:
             with open(args.out, "w", encoding="utf-8") as fh:
