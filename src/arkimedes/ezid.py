@@ -1,10 +1,10 @@
-from inspect import cleandoc
 from itertools import zip_longest
 import sys
 from time import sleep
 
 from lxml import etree
 import requests
+
 
 def anvls_to_dict(anvls):
     """Convert a multi-record ANVL string to a list of dictionaries.
@@ -18,7 +18,7 @@ def anvls_to_dict(anvls):
     --------
     list[dict]
     """
-    return [anvl_to_dict(a) for a in anvls.split("\n\n")]
+    return [anvl_to_dict(a) for a in anvls.strip().split("\n\n")]
 
 
 def anvl_to_dict(anvl):
@@ -46,12 +46,8 @@ def anvl_to_dict(anvl):
 
 
 def batch_download(
-    username,
-    password,
-    format_="anvl",
-    compression="zip",
-    args=""
-    ):
+    username, password, format_="anvl", compression="zip", args=""
+):
     """Batch download ARKs from EZID.
 
     Parameters:
@@ -79,10 +75,14 @@ def batch_download(
     headers = {"Content-type": "application/x-www-form-urlencoded"}
     query = f"format={format_}&compression={compression}{args}"
 
-    r = requests.post(url, data=query, auth=(username, password), headers=headers)
+    r = requests.post(
+        url, data=query, auth=(username, password), headers=headers
+    )
 
     if not r.ok or not r.text.startswith("success: "):
-        print(f"Request failure!\n----------------\n{r.status_code}: {r.text}\n")
+        print(
+            f"Request failure!\n----------------\n{r.status_code}: {r.text}\n"
+        )
 
         if format_ == "csv":
             print("""CSV requests must include headers for the columns you're
@@ -122,35 +122,23 @@ https://ezid.cdlib.org/doc/apidoc.html#download-formats
         print(f"Download failed.\nTry downloading manually from: {url}")
 
 
-def build_anvl(
-    creator,
-    title,
-    dates,
-    target,
-    publisher="Iowa State University Library",
-    type_="Collection",
-    profile="dc",
-):
-    return cleandoc(
-        f"""erc.who:{creator}
-            erc.what:{title}
-            erc.when:{dates}
-            dc.creator:{creator}
-            dc.title:{title}
-            dc.publisher:{publisher}
-            dc.date:{dates}
-            dc.type:{type_}
-            _target:{target}
-            _profile:{profile}
-            """
-    )
+def build_anvl(anvl_dict):
+    lines = [": ".join((k, anvl_dict[k])) for k in anvl_dict.keys()]
+    return "\n".join(lines)
 
 
 def convert_anvl_file_to_tsv(anvl_file, tsv_file):
+    anvls = load_anvl_as_dict(anvl_file)
+    keys = set()
+    for anvl in anvls:
+        keys.update(*anvl.keys())
+    key_list = list(keys)
     with open(tsv_file, "w", encoding="utf-8") as fh:
-        anvls = load_anvl_as_dict(anvl_file)
         for anvl in anvls:
-            fh.write("\t".join(anvl.values()))
+            line = []
+            for k in key_list:
+                line.append(anvl.get(k, ""))
+            fh.write("\t".join(line))
             fh.write("\n")
 
 
@@ -252,14 +240,7 @@ def load_anvl_as_str_from_tsv(tsv_file):
             md = dict(zip(keys, values))
             if "dc.publisher" not in md.keys():
                 md["dc.publisher"] = "Iowa State University Library"
-            anvl = build_anvl(
-                md["dc.creator"],
-                md["dc.title"],
-                md["dc.date"],
-                md["_target"],
-                md["dc.publisher"],
-                type_=md["dc.type"]
-            )
+            anvl = build_anvl(md)
 
             yield anvl
 
@@ -298,43 +279,49 @@ def login(username, password):
     """
     s = requests.Session()
     # Need to spoof the User-Agent to avoid getting a 405 error
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"}
-    payload = {"next": "/", "username": username, "password": password,}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
+    }
+    payload = {
+        "next": "/",
+        "username": username,
+        "password": password,
+    }
     s.post("https://ezid.cdlib.org/login", data=payload, headers=headers)
     return s
 
 
 def query(
-        *,
-        ps=1000,
-        order_by="c_update_time",
-        sort_="asc",
-        owner_selected="user_iastate_lib",
-        c_title="t",
-        c_creator="t",
-        c_identifier="t",
-        c_owner="t",
-        c_create_time="t",
-        c_update_time="t",
-        c_id_status="t",
-        keywords="",
-        identifier="",
-        title="",
-        creator="",
-        publisher="",
-        pubyear_from="",
-        pubyear_to="",
-        object_type="",
-        target="",
-        id_type="",
-        create_time_from="",
-        create_time_to="",
-        update_time_from="",
-        update_time_to="",
-        id_status="",
-        p=1,
-        username,
-        password,
+    *,
+    ps=1000,
+    order_by="c_update_time",
+    sort_="asc",
+    owner_selected="user_iastate_lib",
+    c_title="t",
+    c_creator="t",
+    c_identifier="t",
+    c_owner="t",
+    c_create_time="t",
+    c_update_time="t",
+    c_id_status="t",
+    keywords="",
+    identifier="",
+    title="",
+    creator="",
+    publisher="",
+    pubyear_from="",
+    pubyear_to="",
+    object_type="",
+    target="",
+    id_type="",
+    create_time_from="",
+    create_time_to="",
+    update_time_from="",
+    update_time_to="",
+    id_status="",
+    p=1,
+    username,
+    password,
 ):
     """Search for ARKs by metadata.
 
@@ -443,7 +430,9 @@ def query(
         "id_status": id_status,
         "p": p,
     }
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
+    }
 
     titles = []
     creators = []
@@ -454,32 +443,33 @@ def query(
     id_statuses = []
 
     s = login(username, password)
-
-    titles_xpath = "//td[@class='c_title']/a/text()"
-    creators_xpath = "//td[@class='c_creator']/a/text()"
+    titles_xpath = "//td[@class='c_title']/text()"
+    creators_xpath = "//td[@class='c_creator']/text()"
     identifiers_xpath = "//td[@class='c_identifier']/a/text()"
-    owners_xpth = "//td[@class='c_owner']/a/text()"
-    create_times_xpath = "//td[@class='c_create_time']/a/text()"
-    update_times_xpath = "//td[@class='c_update_time']/a/text()"
-    id_statuses_xpath = "//td[@class='c_id_status']/a/text()"
+    owners_xpath = "//td[@class='c_owner']/text()"
+    create_times_xpath = "//td[@class='c_create_time']/text()"
+    update_times_xpath = "//td[@class='c_update_time']/text()"
+    id_statuses_xpath = "//td[@class='c_id_status']/text()"
 
     def get_all_results():
         r = s.get(url, params=query, headers=headers)
         tree = etree.HTML(r.text)
 
-        rp = tree.xpath("string(//input[@id='page-directselect-bottom']/@max/text())")
+        rp = tree.xpath(
+            "string(//input[@id='page-directselect-bottom']/@max/text())"
+        )
 
-        titles = tree.xpath(titles_xpath)
-        creators = tree.xpath(creators_xpath)
-        identifiers = tree.xpath(idenfiers_xpath)
-        owners = tree.xpath(owners_xpath)
-        create_times = tree.xpath(create_times_xpath)
-        update_times = tree.xpath(update_times_xpath)
-        id_statuses = tree.xpath(id_statuses xpath)
+        titles.extend(tree.xpath(titles_xpath))
+        creators.extend(tree.xpath(creators_xpath))
+        identifiers.extend(tree.xpath(identifiers_xpath))
+        owners.extend(tree.xpath(owners_xpath))
+        create_times.extend(tree.xpath(create_times_xpath))
+        update_times.extend(tree.xpath(update_times_xpath))
+        id_statuses.extend(tree.xpath(id_statuses_xpath))
 
         return rp
 
-    result_pages = rp
+    result_pages = get_all_results()
 
     if result_pages:
         max_pages = int(result_pages)
@@ -487,9 +477,29 @@ def query(
 
         while p <= max_pages:
             query["p"] = p
-            get_all_results()
+            r = get_all_results()
             tree = etree.HTML(r.text)
             p += 1
+
+    # results = []
+    # for row in rows:
+    #     print(f"Row: {row}")
+    #     results.append(
+    #         dict(
+    #             zip(
+    #                 (
+    #                     "creator",
+    #                     "title",
+    #                     "ark",
+    #                     "owner",
+    #                     "created",
+    #                     "updated",
+    #                     "id_status",
+    #                 ),
+    #                 row,
+    #             )
+    #         )
+    #     )
 
     results = (
         dict(
@@ -501,13 +511,12 @@ def query(
                     "owner",
                     "created",
                     "updated",
-                    "id_status"
+                    "id_status",
                 ),
-                row
+                row,
             )
         )
-        for row
-        in zip_longest(
+        for row in zip_longest(
             creators,
             titles,
             identifiers,
@@ -515,11 +524,9 @@ def query(
             create_times,
             update_times,
             id_statuses,
-            fillvalue=""
+            fillvalue="",
         )
     )
-
-    # https://ezid.cdlib.org/manage?filtered=t&ps=10&order_by=c_update_time&sort=asc&owner_selected=user_iastate_lib&c_title=t&c_creator=t&c_identifier=t&c_owner=t&c_create_time=t&c_update_time=t&c_id_status=t&keywords=reuse&identifier=&title=&creator=&publisher=&pubyear_from=&pubyear_to=&object_type=&target=&id_type=&create_time_from=&create_time_to=&update_time_from=&update_time_to=&id_status=&p=2
 
     return results
 
@@ -534,9 +541,14 @@ def upload_anvl(
         request_url = "/".join([base_url, "shoulder", shoulder])
     elif action == "update":
         request_url = "/".join([base_url, "id", shoulder])
+    else:
+        "Action must be upload or"
 
     r = requests.post(
-        request_url, headers=headers, data=anvl_text.encode("utf-8"), auth=(username, password)
+        request_url,
+        headers=headers,
+        data=anvl_text.encode("utf-8"),
+        auth=(username, password),
     )
     ark = r.text[9:]
 
