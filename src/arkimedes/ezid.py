@@ -481,26 +481,6 @@ def query(
             tree = etree.HTML(r.text)
             p += 1
 
-    # results = []
-    # for row in rows:
-    #     print(f"Row: {row}")
-    #     results.append(
-    #         dict(
-    #             zip(
-    #                 (
-    #                     "creator",
-    #                     "title",
-    #                     "ark",
-    #                     "owner",
-    #                     "created",
-    #                     "updated",
-    #                     "id_status",
-    #                 ),
-    #                 row,
-    #             )
-    #         )
-    #     )
-
     results = (
         dict(
             zip(
