@@ -1,3 +1,4 @@
+import csv
 from itertools import zip_longest
 import sys
 from time import sleep
@@ -123,11 +124,33 @@ https://ezid.cdlib.org/doc/apidoc.html#download-formats
 
 
 def build_anvl(anvl_dict):
+    """Convert a dictionary to an ANVL string.
+
+    Parameters
+    ----------
+    anvl_dict : dict[str, str]
+        Dictionary to convert.
+
+    Returns
+    -------
+    str
+    """
     lines = [": ".join((k, anvl_dict[k])) for k in anvl_dict.keys()]
     return "\n".join(lines)
 
 
 def convert_anvl_file_to_tsv(anvl_file, tsv_file):
+    """Convert an ANVL file to a TSV.
+
+    Parameters
+    ----------
+    anvl_file : str or Path
+    tsv_file : str or Path
+
+    Returns
+    -------
+    None
+    """
     anvls = load_anvl_as_dict(anvl_file)
     keys = set()
     for anvl in anvls:
@@ -143,16 +166,63 @@ def convert_anvl_file_to_tsv(anvl_file, tsv_file):
 
 
 def find_reusable(username, password):
+    """Search for ARK with 'reuse' in the title.
+
+    Parameters
+    ----------
+    username : str
+        Admin username for EZID.
+    password : str
+        Admin user password for EZID.
+
+    Returns
+    -------
+    Iterator[dict[str, str]]
+        Yields a dictionary with the fields "title", "creator", "ark",
+        "owner", "create_time", "update_time", and "id_status"
+    """
     results = query(title="reuse", username=username, password=password)
     return results
 
 
 def find_url(url, username, password):
+    """Search for ARK by URL.
+
+    Parameters
+    ----------
+    url : str
+        URL to search for.
+    username : str
+        Admin username for EZID.
+    password : str
+        Admin user password for EZID.
+
+    Returns
+    -------
+    Iterator[dict[str, str]]
+        Yields a dictionary with the fields "title", "creator", "ark",
+        "owner", "create_time", "update_time", and "id_status"
+    """
     results = query(target=url, username=username, password=password)
     return results
 
 
-def generate_anvl_strings(data_source, parser, output_file):
+def generate_anvl_strings(data_source, parser, output_file=None):
+    """Generate anvl strings.
+
+    Parameters
+    ----------
+    data_source : Iterable or Iterator
+        The objects to be parsed.
+    parser : Callable
+        The function to extract ANVL strings from data_source.
+    output_file : None or str or Path
+        The file to save the ANVL strings to.
+
+    Returns
+    -------
+    list[str]
+    """
     anvls = []
 
     for d in data_source:
@@ -167,6 +237,19 @@ def generate_anvl_strings(data_source, parser, output_file):
 
 
 def get_value_from_anvl_string(field, anvl):
+    """Gets the value from an ANVL record for a given key.
+
+    Parameters
+    ----------
+    field : str
+        Key to get value from.
+    anvl : str
+        Record to get value from.
+
+    Returns
+    -------
+    str or None
+    """
     anvl_dict = anvl_to_dict(anvl)
 
     return anvl_dict.get(field)
@@ -234,15 +317,8 @@ def load_anvl_as_str_from_tsv(tsv_file):
         Yields an ANVL record as a string.
     """
     with open(tsv_file, "r", encoding="utf-8") as fh:
-        keys = fh.readline().strip().split("\t")
-        for line in fh:
-            values = line.strip("\r\n").split("\t")
-            md = dict(zip(keys, values))
-            if "dc.publisher" not in md.keys():
-                md["dc.publisher"] = "Iowa State University Library"
-            anvl = build_anvl(md)
-
-            yield anvl
+        for row in load_anvl_as_dict_from_tsv(tsv_file):
+            yield build_anvl(row)
 
 
 def load_anvl_as_dict_from_tsv(tsv_file):
@@ -261,8 +337,12 @@ def load_anvl_as_dict_from_tsv(tsv_file):
     generator
         Yields an ANVL record as a dictionary.
     """
-    for anvl in load_anvl_as_str_from_tsv(tsv_file):
-        yield anvl_to_dict(anvl)
+    with open(tsv_file, "r", encoding="utf-8") as fh:
+        dialect = csv.Sniffer().sniff(fh.read(1024))
+        fh.seek(0)
+        reader = csv.DictReader(fh, dialect=dialect)
+        for row in reader:
+            yield row
 
 
 def login(username, password):
@@ -396,7 +476,7 @@ def query(
 
     Returns
     -------
-    generator
+    Iterator[dict[str, str]]
         Yields a dictionary with the fields "title", "creator", "ark",
         "owner", "create_time", "update_time", and "id_status"
     """
@@ -513,6 +593,29 @@ def query(
 def upload_anvl(
     username, password, shoulder, anvl_text, action="mint", output_file=None
 ):
+    """Mint or update ARKs by uploading a single ANVL record.
+
+    Parameters
+    ----------
+    username : str
+        Admin username for EZID.
+    password : str
+        Admin user password for EZID.
+    shoulder : str
+        ARK prefix.
+    anvl_text : str
+        ARK metadata to upload.
+    action : str
+       Can be 'mint' or 'update'. Whether we're minting a new ARK or
+       updating an existing one.
+    output_file : None or str or Path
+        Optional. File to save ARK ID and metadata to.
+
+    Returns
+    -------
+    str
+       The ARK for the created or updated record.
+    """
     base_url = "https://ezid.cdlib.org"
     headers = {"Content-Type": "text/plain; charset=UTF-8"}
 
@@ -543,6 +646,24 @@ def upload_anvl(
 
 
 def view_anvl(username, password, ark, print_=True):
+    """Get the metadata for a given ARK.
+
+    Parameters
+    ----------
+    username : str
+        Admin username for EZID.
+    password : str
+        Admin user password for EZID.
+    ark : str
+        The ARK that we want to view the metadata of.
+    print_ : bool
+       Whether or not to print the metadata to standard output.
+
+    Returns
+    -------
+    str
+        ARK metadata.
+    """
     base_url = "https://ezid.cdlib.org/id"
     request_url = "/".join([base_url, ark])
     r = requests.get(request_url, auth=(username, password))

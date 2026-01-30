@@ -95,7 +95,7 @@ def main():
 'mint-anvl', 'mint-ead', 'mint-conservation-report', 'mint-tsv', 'update',
 "update-tsv", "query", and 'view'. 'mint-anvl' mints new ARKs from ANVL metadata
 and 'mint-ead' mints ARKs from EAD XML. 'mint-conservation-report' mints new ARKs
-from Conservation Report PDFs. 'mint-tsv' mints new ARKs from a TSV file.""",
+from Conservation Report PDFs. 'mint-tsv' mints new ARKs from a TSV or CSV file.""",
     )
     parser.add_argument(
         "target",
