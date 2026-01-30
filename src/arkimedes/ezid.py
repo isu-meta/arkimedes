@@ -477,8 +477,7 @@ def query(
 
         while p <= max_pages:
             query["p"] = p
-            r = get_all_results()
-            tree = etree.HTML(r.text)
+            get_all_results()
             p += 1
 
     results = (
@@ -522,7 +521,7 @@ def upload_anvl(
     elif action == "update":
         request_url = "/".join([base_url, "id", shoulder])
     else:
-        "Action must be upload or"
+        raise ValueError(f"'{action}' is invalid. Must be 'upload' or 'mint'.")
 
     r = requests.post(
         request_url,
