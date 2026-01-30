@@ -1,6 +1,6 @@
 from urllib.parse import quote_plus
 
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 from lxml import etree, html
 import requests
 
@@ -40,7 +40,9 @@ def check_lc_naf(name):
                     f"Uncertain match. Original: {name}. Top 2 matches: {one} | {two}.\n"
                 )
             elif one[0] < threshold:
-                print(f"Uncertain match: Original: {name}.  Best match: {one}\n")
+                print(
+                    f"Uncertain match: Original: {name}.  Best match: {one}\n"
+                )
             else:
                 return_name = matches[0][2]
     else:

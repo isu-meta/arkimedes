@@ -7,21 +7,6 @@ from lxml import etree
 import requests
 
 
-def anvls_to_dict(anvls):
-    """Convert a multi-record ANVL string to a list of dictionaries.
-
-    Parameters:
-    -----------
-    anvl : str
-        An ANVL-formatted string.
-
-    Returns:
-    --------
-    list[dict]
-    """
-    return [anvl_to_dict(a) for a in anvls.strip().split("\n\n")]
-
-
 def anvl_to_dict(anvl):
     """Convert single-record ANVL string to dictionary.
 
@@ -44,6 +29,21 @@ def anvl_to_dict(anvl):
             ark_dict[k.strip()] = v.strip()
 
     return ark_dict
+
+
+def anvls_to_dict(anvls):
+    """Convert a multi-record ANVL string to a list of dictionaries.
+
+    Parameters:
+    -----------
+    anvl : str
+        An ANVL-formatted string.
+
+    Returns:
+    --------
+    list[dict]
+    """
+    return [anvl_to_dict(a) for a in anvls.strip().split("\n\n")]
 
 
 def batch_download(

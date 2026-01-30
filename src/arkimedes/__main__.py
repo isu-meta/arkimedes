@@ -18,10 +18,10 @@ password to be provided.
 import argparse
 import re
 
-from arkimedes import get_sources
+import requests
+
 from arkimedes.ead import generate_anvl_from_ead_xml
 from arkimedes.ezid import (
-    anvl_to_dict,
     batch_download,
     find_reusable,
     find_url,
@@ -33,6 +33,41 @@ from arkimedes.ezid import (
     view_anvl,
 )
 from arkimedes.pdf import generate_anvl_from_conservation_reports
+
+
+def get_from_files(fs, encoding="utf-8"):
+    """Helper function for get_sources."""
+    files = []
+    for f in fs:
+        with open(f, "r", encoding=encoding) as fh:
+            content = fh.read()
+        files.append(content)
+
+    return files
+
+
+def get_from_urls(urls):
+    """Helper function for get_sources."""
+    files = []
+    for url in urls:
+        try:
+            request = requests.get(url)
+            if request.ok:
+                files.append(request.content)
+        except:
+            print(f"Item not found: {url}")
+
+    return files
+
+
+def get_sources(sources):
+    fs = [s for s in sources if not s.startswith("http")]
+    urls = [s for s in sources if s.startswith("http")]
+
+    files = get_from_files(fs)
+    files.extend(get_from_urls(urls))
+
+    return files
 
 
 class MissingArgumentError(Exception):

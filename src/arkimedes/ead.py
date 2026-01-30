@@ -2,9 +2,10 @@ from io import BytesIO
 
 from lxml import etree
 
-from arkimedes import CONCAT_STRING
 from arkimedes.ezid import build_anvl, generate_anvl_strings
 from arkimedes.qa import check_lc_naf
+
+CONCAT_STRING = "\n---\n"
 
 
 def _generate_anvl_from_ead_xml(xml):
@@ -38,5 +39,3 @@ def _generate_anvl_from_ead_xml(xml):
 
 def generate_anvl_from_ead_xml(xml, output_file=None):
     return generate_anvl_strings(xml, _generate_anvl_from_ead_xml, output_file)
-
-
