@@ -20,7 +20,7 @@ import re
 
 import requests
 
-from arkimedes.ead import generate_anvl_from_ead_xml
+from arkimedes.ead import get_oai_ead, generate_anvl_from_ead_xml
 from arkimedes.ezid import (
     batch_download,
     find_reusable,
@@ -50,12 +50,15 @@ def get_from_urls(urls):
     """Helper function for get_sources."""
     files = []
     for url in urls:
-        try:
+        if "cardinal.lib.iastate.edu" in url:
+            request = get_oai_ead(url)
+            files.append(request)
+        else:
             request = requests.get(url)
             if request.ok:
                 files.append(request.content)
-        except:
-            print(f"Item not found: {url}")
+            else:
+                print(f"Item not found: {url}")
 
     return files
 
@@ -79,11 +82,10 @@ def submit_md(args, anvl, reusables=(x for x in [])):
     if "update" in args.action:
         upload(args, anvl, "update")
     else:
+        url = get_value_from_anvl_string("_target", anvl)
         if args.no_url_check:
             found = None
         else:
-            url = get_value_from_anvl_string("_target", anvl)
-
             try:
                 found = next(find_url(url, args.username, args.password))
             except StopIteration:
@@ -218,9 +220,9 @@ exist always check the URLs as part of the minting process.""",
                 for a in load_anvl_as_str(anvl):
                     submit_md(args, a, reusables)
     elif args.action == "mint-ead":
-        ead_xml = get_sources(args.source)
+        ead_xmls = get_sources(args.source)
 
-        anvls = generate_anvl_from_ead_xml(ead_xml)
+        anvls = generate_anvl_from_ead_xml(ead_xmls)
 
         for anvl in anvls:
             submit_md(args, anvl, reusables)
