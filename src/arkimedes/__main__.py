@@ -16,6 +16,7 @@ password to be provided.
 """
 
 import argparse
+from pathlib import Path
 import re
 
 import requests
@@ -39,8 +40,12 @@ def get_from_files(fs, encoding="utf-8"):
     """Helper function for get_sources."""
     files = []
     for f in fs:
-        with open(f, "r", encoding=encoding) as fh:
-            content = fh.read()
+        if Path(f).suffix == ".pdf":
+            with open(f, "rb") as fh:
+                content = fh.read()
+        else:
+            with open(f, "r", encoding=encoding) as fh:
+                content = fh.read()
         files.append(content)
 
     return files
@@ -124,7 +129,9 @@ def upload(args, anvl, action):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="arkimedes", description="ARKs management utility"
+    )
 
     parser.add_argument(
         "action",
@@ -181,6 +188,11 @@ the default format 'anvl' is used.""",
         help="Files or URLs that contain metadata for populating ARK records",
     )
     parser.add_argument(
+        "--resolve-to",
+        nargs="+",
+        help="URLs for the ARKs to resolve to. Required for 'mint-conservation-report'.",
+    )
+    parser.add_argument(
         "--reuse",
         action="store_true",
         help="""When this flag is used with an action that mints a new ARK,
@@ -227,13 +239,18 @@ exist always check the URLs as part of the minting process.""",
         for anvl in anvls:
             submit_md(args, anvl, reusables)
     elif args.action == "mint-conservation-report":
-        pdfs = get_sources(args.source)
-        pdf_data = zip(pdfs, args.source)
+        if args.resolve_to is None:
+            raise MissingArgumentError(
+                "mint-conservation-report requires the argument --resolve-to."
+            )
+        else:
+            pdfs = get_sources(args.source)
+            pdf_data = zip(pdfs, args.resolve_to)
 
-        anvls = generate_anvl_from_conservation_reports(pdf_data)
+            anvls = generate_anvl_from_conservation_reports(pdf_data)
 
-        for anvl in anvls:
-            submit_md(args, anvl, reusables)
+            for anvl in anvls:
+                submit_md(args, anvl, reusables)
     elif args.action == "mint-tsv":
         for source in args.source:
             for anvl in load_anvl_as_str_from_tsv(source):

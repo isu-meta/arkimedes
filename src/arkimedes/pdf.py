@@ -61,7 +61,15 @@ def _generate_anvl_from_conservation_report(pdf_data):
     if date != "":
         date = convert_date_string_to_iso(date)
 
-    return build_anvl(creator, title, date, pdf_url, type_="Text")
+    return build_anvl(
+        {
+            "dc:creator": creator,
+            "dc:title": title,
+            "dc:date": date,
+            "dc:type": "Text",
+            "_target": pdf_url,
+        }
+    )
 
 
 def generate_anvl_from_conservation_reports(pdf_data, output_file=None):
