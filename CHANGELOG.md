@@ -1,5 +1,17 @@
 # Changelog
 
+## [2025.2.11]
+
+### Changed
+
+- fixed Dublin Core ANVL keys in pdf.py
+
+## [2025.2.10]
+
+### Changed
+
+- Fix bug in 'update-tsv'
+
 ## [2026.2.6]
 
 ### Added

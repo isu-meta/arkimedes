@@ -63,10 +63,10 @@ def _generate_anvl_from_conservation_report(pdf_data):
 
     return build_anvl(
         {
-            "dc:creator": creator,
-            "dc:title": title,
-            "dc:date": date,
-            "dc:type": "Text",
+            "dc.creator": creator,
+            "dc.title": title,
+            "dc.date": date,
+            "dc.type": "Text",
             "_target": pdf_url,
         }
     )

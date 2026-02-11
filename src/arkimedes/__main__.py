@@ -24,10 +24,12 @@ import requests
 from arkimedes.ead import get_oai_ead, generate_anvl_from_ead_xml
 from arkimedes.ezid import (
     batch_download,
+    build_anvl,
     find_reusable,
     find_url,
     get_value_from_anvl_string,
     load_anvl_as_str,
+    load_anvl_as_dict_from_tsv,
     load_anvl_as_str_from_tsv,
     query,
     upload_anvl,
@@ -284,8 +286,9 @@ exist always check the URLs as part of the minting process.""",
             submit_md(args, anvl)
     elif args.action == "update-tsv":
         for source in args.source:
-            for anvl in load_anvl_as_str_from_tsv(source):
-                submit_md(args, anvl)
+            for md in load_anvl_as_dict_from_tsv(source):
+                args.target = md.get("ark")
+                submit_md(args, build_anvl(md))
 
     elif args.action == "view":
         view_anvl(args.username, args.password, args.target)
